@@ -1,0 +1,5 @@
+*.bat
+*.bat
+src/ffmpeg_bin/*
+.mypy_cache
+__pycache__
