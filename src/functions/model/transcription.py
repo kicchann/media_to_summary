@@ -1,10 +1,10 @@
 from pydantic import BaseModel
 
-from functions.model import User
+from src.functions.model import Speaker
 
 
 class Transcription(BaseModel):
     text: str
-    speaker: User = User()
+    speaker: Speaker = Speaker()
     duration: float = 0.0
     start_time: float = 0.0

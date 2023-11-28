@@ -34,7 +34,7 @@ To install `video_to_summary_prod`, follow these steps:
     ├── video ← 動画保管
     └── result ← 要約結果保管
    ```
-2. 環境変数としてOPENAI_API_KEYと，OPENAI_API_WHISPER_KEYを準備．
+2. 環境変数としてOPENAI_API_KEYと，OPENAI_API_WHISPER_KEYを準備．  
    （なお，OPENAI_API_WHISPER_KEYはfaster-whisperを使う場合は不要）
 3. MS Formsでフォームを準備．
 4. モジュール立ち上げ．

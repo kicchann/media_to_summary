@@ -1,7 +1,7 @@
 from pydantic import BaseModel
 
 
-class User(BaseModel):
+class Speaker(BaseModel):
     id: str = ""
     email: str = ""
     name: str = "unknown"

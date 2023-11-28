@@ -1,11 +1,17 @@
 import json
 import os
 from glob import glob
+from typing import Union
 
 from src.config import RESPONSE_KEY
+from src.log.my_logger import MyLogger
+from src.model import Response, Task, VideoInfo
+
+my_logger = MyLogger(__name__)
+logger = my_logger.logger
 
 
-def find_resnponse_file_path(root_dir, video_file_name: str):
+def find_resnponse_file_path(root_dir, video_file_name: str) -> Union[str, None]:
     """
     動画ファイルに対応するレスポンスファイルのパスを返す関数
 
@@ -16,22 +22,62 @@ def find_resnponse_file_path(root_dir, video_file_name: str):
     Returns:
         str: レスポンスファイルのパス
     """
+    logger.info("find_resnponse_file_path called")
+    logger.info(f"root_dir: {root_dir}")
+    logger.info(f"video_file_name: {video_file_name}")
+    logger.info("start searching response file path")
     # "root_dir\response"から，動画ファイルに対応するresponseファイルを探す
     files = glob(os.path.join(root_dir, "response", "*.json"))
     response_file_path = None
     for file_ in files:
         with open(file_, "r", encoding="UTF-8") as f:
             data = json.load(f)
-        # r46dc0e4de2e948cf9370d88e7beb0071は動画ファイル情報のkey
         if not isinstance(data, dict):
             continue
-        if "r46dc0e4de2e948cf9370d88e7beb0071" not in data:
+        if RESPONSE_KEY.VIDEO_INFO.value not in data:
             continue
-        video_info = json.loads(data["r46dc0e4de2e948cf9370d88e7beb0071"])
+        video_info = json.loads(data[RESPONSE_KEY.VIDEO_INFO.value])
         if video_info[0]["name"] == video_file_name:
             response_file_path = file_
+            logger.info("response file path found successfully")
+            logger.info(f"response_file_path: {response_file_path}")
             break
+    if response_file_path is None:
+        logger.warning("response file path not found")
+    logger.info("finish searching response file path")
     return response_file_path
+
+
+def read_response_file(response_file_path: Union[str, None]) -> Union[Response, None]:
+    """
+    レスポンスファイルを読み込む関数
+
+    Args:
+        response_file_path (str): レスポンスファイルのパス
+
+    Returns:
+        dict: レスポンスファイルの内容
+    """
+    logger.info("read_response_file called")
+    logger.info(f"response_file_path: {response_file_path}")
+    if response_file_path is None:
+        logger.warning("response file path is not found")
+        logger.info("finish reading response file")
+        return None
+    with open(response_file_path, "r", encoding="UTF-8") as f:
+        response_dict = json.load(f)
+    new_response_dict = {}
+    for k, v in response_dict.items():
+        k_ = RESPONSE_KEY(k).name.lower()
+        if k_ == "video_info":
+            video_info_list = json.loads(v)
+            v = VideoInfo(**video_info_list[0])
+        if "add_" in k_:
+            v = True if v == "必要" else False
+        new_response_dict[k_] = v
+    response = Response(**new_response_dict)
+    logger.info("finish reading response file")
+    return response
 
 
 def clean_up(result: dict):
@@ -65,52 +111,35 @@ def clean_up(result: dict):
     return
 
 
-def save_result(result: dict):
+def save_result(result: Task):
     """
     処理結果情報を保存する関数
 
     Args:
-        result (dict): 処理結果情報
-        {
-            "status": str,
-            "progress": str,
-            "response_file_path": str,
-            "video_file_path": str,
-            "audio_file_path": str,
-            "split_audio_file_paths": list[str],
-            "transcriptions": list[dict],
-            "summarization": dict,
-        }
+        result (Task): 処理結果情報
 
     Returns:
         None
     """
+    logger.info("save_result called")
+    logger.info(f"result: {result}")
     # 処理結果情報を保存する
-    root_dir = os.path.dirname(os.path.dirname(result["response_file_path"]))
-    response_file_name = os.path.basename(result["response_file_path"])
+    if not result.response_file_path:
+        logger.warning("response file path is not found")
+        logger.info("finish saving result")
+        return
+
+    root_dir = os.path.dirname(os.path.dirname(result.response_file_path))
+    response_file_name = os.path.basename(result.response_file_path)
     result_dir = os.path.join(root_dir, "result")
     result_file_path = os.path.join(result_dir, response_file_name)
-
-    # レスポンスファイルを読み込む
-    response = {}
-    if result["response_file_path"] != "":
-        with open(result["response_file_path"], "r", encoding="UTF-8") as f:
-            response = json.load(f)
-        result["response"] = {}
-        for k, v in response.items():
-            k_ = RESPONSE_KEY(k).name
-            if k_ == "ignore_key":
-                continue
-            result["response"][k_] = v
-    if result["status"] == "error":
-        result["message"] = "エラーが発生しました"
-    else:
-        result["message"] = "要約が完了しました"
 
     if not os.path.exists(result_dir):
         os.makedirs(result_dir, exist_ok=True)
     with open(result_file_path, "w", encoding="UTF-8") as f:
-        json.dump(result, f, ensure_ascii=False, indent=4)
+        json.dump(result.model_dump(), f, ensure_ascii=False, indent=4)
+    logger.info(f"result saved to {result_file_path}")
+    logger.info("finish saving result")
     return
 
 

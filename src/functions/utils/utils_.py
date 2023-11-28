@@ -7,7 +7,7 @@ from typing import Union
 import openai
 import requests
 
-from functions.config import (
+from src.functions.config import (
     DEFAULT_LANGUAGE,
     OPENAI_API_ENDPOINT,
     OPENAI_API_MODEL,
@@ -27,6 +27,12 @@ def create_id(length: int = 8) -> str:
     # この文字列からランダムに8文字選び、新しい文字列を作成
     random_string = "".join(random.choice(characters) for _ in range(length))
     return random_string
+
+
+def set_path_for_ffmpeg_bin(base_dir: str):
+    # set PATH for ffmpeg
+    ffmpeg_path = os.path.join(base_dir, "ffmpeg_bin", "bin")
+    os.environ["PATH"] = ffmpeg_path + os.pathsep + os.environ["PATH"]
 
 
 def create_chat_completion(
@@ -198,12 +204,12 @@ def _transcript_by_faster_whisper(
 ):
     from faster_whisper import WhisperModel
 
-    # model_size = "large-v2"
-    user_profile = os.environ["USERPROFILE"]
-    model_size = os.path.join(
-        user_profile,
-        r"Downloads\video_to_mom_streamlit\src\huggingface\hub\models--guillaumekln--faster-whisper-large-v2\snapshots\f541c54c566e32dc1fbce16f98df699208837e8b",
-    )
+    model_size = "large-v2"
+    # user_profile = os.environ["USERPROFILE"]
+    # model_size = os.path.join(
+    #     user_profile,
+    #     r"Downloads\video_to_mom_streamlit\src\huggingface\hub\models--guillaumekln--faster-whisper-large-v2\snapshots\f541c54c566e32dc1fbce16f98df699208837e8b",
+    # )
     model = WhisperModel(model_size, device="cpu", compute_type="int8")
     segments, _ = model.transcribe(
         file_path,

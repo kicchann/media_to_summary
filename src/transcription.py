@@ -1,5 +1,9 @@
 from src.functions import transcript_audio
+from src.log.my_logger import MyLogger
 from src.model import Task
+
+my_logger = MyLogger(__name__)
+logger = my_logger.logger
 
 
 def transcription_task(task: Task) -> Task:
@@ -11,19 +15,34 @@ def transcription_task(task: Task) -> Task:
     Returns:
         Task: 処理結果のタスク
     """
-    print("transcription_task called")
+    logger.info("transcription_task called")
     # 処理結果情報
     transcriptions = []
-    if isinstance(task.audio_data_list, list):
-        for audio_data in task.audio_data_list:
-            transcription = transcript_audio(audio_data)
-            transcriptions += [transcription]
-
+    if not task.audio_data_list:
+        return task
+    for audio_data in task.audio_data_list:
+        try:
+            transcriptions += [transcript_audio(audio_data)]
+        except Exception as e:
+            logger.error("error occurred while transcribing audio file")
+            logger.error(f"audio_data: {audio_data}")
+            logger.error(e)
+            result = task.model_copy(
+                deep=True,
+                update=dict(
+                    status="error",
+                    progress="error occurred while transcribing audio file",
+                    transcriptions=None,
+                ),
+            )
+            return result
     result = task.model_copy(
         deep=True,
         update=dict(
+            status="success",
             progress="transcription completed",
             transcriptions=transcriptions,
         ),
     )
+    logger.info("transcription_task finished")
     return result

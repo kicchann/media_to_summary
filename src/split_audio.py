@@ -2,7 +2,11 @@ import os
 
 from src.config import SPLIT_AUDIO_DIR
 from src.functions import split_audio
+from src.log.my_logger import MyLogger
 from src.model import Task
+
+my_logger = MyLogger(__name__)
+logger = my_logger.logger
 
 
 def split_audio_task(task: Task) -> Task:
@@ -14,10 +18,34 @@ def split_audio_task(task: Task) -> Task:
     Returns:
         Task: 処理結果のタスク
     """
-    print("split_audio_task called")
+    logger.info("split_audio_task called")
 
     os.makedirs(SPLIT_AUDIO_DIR, exist_ok=True)
-    audio_data_list = split_audio(str(task.audio_file_path), SPLIT_AUDIO_DIR)
+    try:
+        audio_data_list = split_audio(str(task.audio_file_path), SPLIT_AUDIO_DIR)
+    except Exception as e:
+        logger.error("error occurred while splitting audio file")
+        logger.error(e)
+        result = task.model_copy(
+            deep=True,
+            update=dict(
+                status="error",
+                progress="error occurred while splitting audio file",
+                audio_data_list=None,
+            ),
+        )
+        return result
+    if len(audio_data_list) == 0:
+        logger.warning("failed to split audio file")
+        result = task.model_copy(
+            deep=True,
+            update=dict(
+                status="error",
+                progress="audio file is not splitted",
+                audio_data_list=None,
+            ),
+        )
+        return result
     # 処理結果情報
     result = task.model_copy(
         deep=True,
@@ -27,4 +55,6 @@ def split_audio_task(task: Task) -> Task:
             audio_data_list=audio_data_list,
         ),
     )
+    logger.info(f"audio is splitted in {len(audio_data_list)} pieces")
+    logger.info("split_audio_task finished")
     return result

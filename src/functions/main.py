@@ -1,3 +1,4 @@
+import os
 import time
 from typing import Dict, List, Union
 
@@ -9,13 +10,16 @@ from src.functions.model import AudioData, Transcription
 from src.functions.utils import (
     AudioSplitter,
     create_chat_completion,
+    set_path_for_ffmpeg_bin,
     transcript_by_whisper,
 )
 
 
 # 1時間以上かかる場合は，エラーとする
-@timeout_decorator.timeout(60 * 60)
+# @timeout_decorator.timeout(3600, use_signals=False)
 def convert_video_to_audio(video_file_path: str, audio_file_path: str):
+    base_dir = os.path.dirname(os.path.dirname(__file__))
+    set_path_for_ffmpeg_bin(base_dir)
     # ffmpeg.bin = os.path.join(os.path.dirname(os.path.dirname(__file__)), r'ffmpeg_bin\bin')
     stream = ffmpeg.input(video_file_path)
     stream = ffmpeg.output(stream, audio_file_path, format="mp3")
@@ -120,9 +124,9 @@ def summarize_text(
 
     """
     if add_title:
-        system_prompt += "## タイトル\n[please write title]\n\n"
-    system_prompt += "## 要約\n- [please write summary]\n\n"
+        system_prompt += "\n## タイトル \n[please write title]\n\n"
+    system_prompt += "## 要約 \n- [please write summary]\n\n"
     if add_todo:
-        system_prompt += "## TODO\n- [please write todo]\n\n"
+        system_prompt += "## TODO \n- [please write todo]\n\n"
     summary = create_chat_completion(system_prompt, transcript_text)
     return summary

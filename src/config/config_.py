@@ -21,6 +21,17 @@ class RESPONSE_KEY(Enum):
     ADD_TODO = "r520f4a06e68249b4bc81e8a4fd75d151"
     IGNORE_KEY = "r05810abde1e84d0da0e0ee40d83a32f6"
 
-    @property
-    def value(self):
-        return self.name.lower()
+
+class VIDEO_INFO_KEY(Enum):
+    """
+    Power Automateからのレスポンス情報のkeyを定義するEnum
+    """
+
+    NAME = "name"
+    LINK = "link"
+    ID = "id"
+    TYPE = "type"
+    REFERENCE_ID = "referenceId"
+    DRIVE_ID = "driveId"
+    STATUS = "status"
+    UPLOAD_SESSION_URL = "uploadSessionUrl"
