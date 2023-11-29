@@ -1,5 +1,6 @@
 import os
 import shutil
+import uuid
 from typing import Dict, List, Union
 
 from pydub import AudioSegment
@@ -44,9 +45,9 @@ class AudioSplitter:
         # 超えない場合はそのままaudiosフォルダに移動
         file_size = os.path.getsize(audio_file_path)
         if file_size <= self._max_file_size_for_whisper:
-            audio_data_id = str(1).zfill(3)
+            audio_data_id = str(uuid.uuid4())  # str(1).zfill(3)
             split_audio_file_path = os.path.join(
-                split_audio_dir, f"out_{audio_data_id}.{format}"
+                split_audio_dir, f"{audio_data_id}.{format}"
             )
             # ファイルをコピーしてaudiosフォルダに移動
             shutil.copyfile(audio_file_path, split_audio_file_path)
@@ -85,9 +86,9 @@ class AudioSplitter:
         audio_data_list: List[AudioData] = []
         for i, chunk in enumerate(new_chunks):
             start_time = sum([len(c) for c in new_chunks[:i]])
-            audio_data_id = str(i + 1).zfill(3)
+            audio_data_id = str(uuid.uuid4())  # str(i + 1).zfill(3)
             split_audio_file_path = os.path.join(
-                split_audio_dir, f"out_{audio_data_id}.{format}"
+                split_audio_dir, f"{audio_data_id}.{format}"
             )
             chunk.export(split_audio_file_path, format=format)
             audio_data_list += [
