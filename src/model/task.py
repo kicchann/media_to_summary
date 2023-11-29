@@ -1,4 +1,4 @@
-from typing import List, Union
+from typing import List, Literal, Union
 
 from pydantic import BaseModel
 
@@ -7,7 +7,7 @@ from src.model import Response, Summarization
 
 
 class Task(BaseModel):
-    status: str
+    status: Literal["success", "error"]
     progress: str
     response_file_path: Union[str, None] = None
     video_file_path: Union[str, None] = None

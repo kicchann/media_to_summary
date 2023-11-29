@@ -31,6 +31,17 @@ def worker(
     final_result_queue: multiprocessing.Queue,
 ):
     for task in iter(task_queue.get, "STOP"):
+        if task.status == "error":
+            logger.info(
+                f"""
+                received error task.
+                pid: {os.getpid()}
+                function: {func.__name__}
+                task: {task}
+                """
+            )
+            final_result_queue.put(task)
+            continue
         logger.info(
             f"""
             start working!!
@@ -138,10 +149,38 @@ class Handler(FileSystemEventHandler):
             video_file_name=video_file_name,
         )
         response = read_response_file(response_file_path)
+
+        # 動画ファイルにアクセスができるようになるまで待機
+        # 10分経ってもアクセスできない場合は，エラーとして処理を中断
+        current_time = time.time()
+        while True:
+            try:
+                with open(event.src_path, "rb"):
+                    break
+            except Exception as e:
+                if time.time() - current_time > 600:
+                    logger.error(
+                        f"""
+                        cannot access to {event.src_path} for 10 minutes.
+                        please check the file.
+                        """
+                    )
+                    self.task_queue.put(
+                        Task(
+                            status="error",
+                            progress="cannot access to video file",
+                            response_file_path=response_file_path,
+                            video_file_path=event.src_path,
+                            response=response,
+                            message="cannot access to video file",
+                        )
+                    )
+                    return
+                time.sleep(1)
+
         self.task_queue.put(
             Task(
                 status="success",
-                root_dir=root_dir,
                 progress="start video_to_audio",
                 response_file_path=response_file_path,
                 video_file_path=event.src_path,

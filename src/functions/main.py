@@ -115,7 +115,7 @@ def summarize_text(
     # tasks  
 
     - Interpret the input text abstractly, summarizes it without losing important context, and generate a title of no more than 50 characters  
-    - Interpret the input text abstractly, summarize it without losing important context, and generate summaries of no more than {summary_length} characters  
+    - Interpret the input text abstractly, summarize it without losing important context, and generate bulleted summaries of no more than {summary_length} characters in total 
     - In summaries, it is preferable to include the concrete numbers and facts that are important in the input text  
     - Please output in JAPANESE  
     - Please output in a markdown style structured text format  
@@ -124,7 +124,7 @@ def summarize_text(
 
     """
     if add_title:
-        system_prompt += "\n## タイトル \n[please write title]\n\n"
+        system_prompt += "\n\n## タイトル \n\n[please write title]\n\n"
     system_prompt += "## 要約 \n- [please write summary]\n\n"
     if add_todo:
         system_prompt += "## TODO \n- [please write todo]\n\n"
