@@ -32,6 +32,7 @@ def transcription_task(task: Task) -> Task:
                 update=dict(
                     status="error",
                     progress="error occurred while transcribing audio file",
+                    message="文字起こし中にエラーが発生しました",
                     transcriptions=None,
                 ),
             )

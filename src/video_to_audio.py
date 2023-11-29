@@ -28,6 +28,7 @@ def video_to_audio_task(task: Task) -> Task:
             update=dict(
                 status="error",
                 progress="video file does not exist",
+                message="動画ファイルが見つかりません",
                 audio_file_path=None,
             ),
         )
@@ -54,7 +55,7 @@ def video_to_audio_task(task: Task) -> Task:
             update=dict(
                 status="error",
                 progress="ffmpeg takes too long time",
-                message="動画ファイルを音声ファイルに変換する際にエラーが発生しました",
+                message="動画ファイルの音声ファイルへの変換中にエラーが発生しました",
                 audio_file_path=None,
             ),
         )

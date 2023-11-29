@@ -35,6 +35,7 @@ def summarization_task(task: Task) -> Task:
             update=dict(
                 status="error",
                 progress="error occurred while summarizing text",
+                message="要約中にエラーが発生しました",
                 summarization=None,
             ),
         )
@@ -45,6 +46,7 @@ def summarization_task(task: Task) -> Task:
         update=dict(
             status="success",
             progress="summarization completed",
+            message="要約が完了しました",
             summarization=summarization,
         ),
     )

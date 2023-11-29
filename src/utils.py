@@ -80,34 +80,35 @@ def read_response_file(response_file_path: Union[str, None]) -> Union[Response, 
     return response
 
 
-def clean_up(result: dict):
+def clean_up(result: Task):
     """
     処理結果情報をクリーンアップする関数
 
     Args:
-        result (dict): 処理結果情報
-        {
-            "status": str,
-            "progress": str,
-            "response_file_path": str,
-            "video_file_path": str,
-            "audio_file_path": str,
-            "split_audio_file_paths": list[str],
-            "transcriptions": list[dict],
-            "summarization": dict,
-        }
+        result (Task): 処理結果情報
 
     Returns:
         None
     """
-    # ファイルがあればディレクトリから削除する
-    # if os.path.exists(result["video_file_path"]):
-    #     os.remove(result["video_file_path"])
-    # if os.path.exists(result["audio_file_path"]):
-    #     os.remove(result["audio_file_path"])
-    # for file_path in result["split_audio_file_paths"]:
-    #     if os.path.exists(file_path):
-    #         os.remove(file_path)
+    # 一時ファイルをディレクトリから削除する
+    logger.info("clean_up called")
+
+    if result.audio_file_path:
+        try:
+            os.remove(result.audio_file_path)
+            logger.info(f"remove {result.audio_file_path}")
+        except Exception as e:
+            logger.warning("failed to remove audio file")
+            logger.warning(e)
+    if result.audio_data_list:
+        for audio_data in result.audio_data_list:
+            try:
+                os.remove(audio_data.file_path)
+                logger.info(f"remove {audio_data.file_path}")
+            except Exception as e:
+                logger.warning("failed to remove audio file")
+                logger.warning(e)
+    logger.info("finish cleaning up")
     return
 
 
@@ -122,7 +123,6 @@ def save_result(result: Task):
         None
     """
     logger.info("save_result called")
-    logger.info(f"result: {result}")
     # 処理結果情報を保存する
     if not result.response_file_path:
         logger.warning("response file path is not found")

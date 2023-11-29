@@ -31,6 +31,7 @@ def split_audio_task(task: Task) -> Task:
             update=dict(
                 status="error",
                 progress="error occurred while splitting audio file",
+                message="音声ファイルの加工に失敗しました",
                 audio_data_list=None,
             ),
         )
@@ -42,6 +43,7 @@ def split_audio_task(task: Task) -> Task:
             update=dict(
                 status="error",
                 progress="audio file is not splitted",
+                message="音声ファイルを加工しましたが，ファイルが見つかりません",
                 audio_data_list=None,
             ),
         )
