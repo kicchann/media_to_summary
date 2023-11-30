@@ -141,28 +141,3 @@ def save_result(result: Task):
     logger.info(f"result saved to {result_file_path}")
     logger.info("finish saving result")
     return
-
-
-# {
-#     "status": "success",
-#     "progress": "summarization completed",
-#     "message": "要約が完了しました",
-#     "response_file_path": "",
-#     "video_file_path": "",
-#     "audio_file_path": "",
-#     "split_audio_file_paths": [],
-#     "transcriptions": [],
-#     "summarization": {
-#         "summary": "<h2>## タイトル</h2><p>タイトルのサンプルです</p><h2>## 要約</h2><p>要約のサンプルです</p>",
-#         "transcription_file_url": "",
-#     },
-#     "response": {
-#         "responder": "",
-#         "submit_date": "",
-#         "description": "ステーキ",
-#         "summary_length": 1000,
-#         "add_title": "必要",
-#         "add_todo": "必要",
-#         "video_info": "",
-#     },
-# }

@@ -144,24 +144,24 @@ class Handler(FileSystemEventHandler):
         # 動画ファイルに対応するレスポンスファイルのパスを取得
         root_dir = os.path.dirname(os.path.dirname(event.src_path))
         video_file_name = os.path.basename(event.src_path)
-        response_file_path = find_resnponse_file_path(
-            root_dir=root_dir,
-            video_file_name=video_file_name,
-        )
-        response = read_response_file(response_file_path)
 
-        # 動画ファイルにアクセスができるようになるまで待機
+        # 動画ファイルとresponseファイルにアクセスができるようになるまで待機
         # 10分経ってもアクセスできない場合は，エラーとして処理を中断
         current_time = time.time()
         while True:
             try:
+                response_file_path = find_resnponse_file_path(
+                    root_dir=root_dir,
+                    video_file_name=video_file_name,
+                )
+                if not response_file_path:
+                    raise Exception()
+                response = read_response_file(response_file_path)
                 with open(event.src_path, "rb"):
-                    if not response_file_path:
-                        raise Exception()
                     break
             except Exception as e:
                 if time.time() - current_time <= 600:
-                    time.sleep(1)
+                    time.sleep(30)
                     continue
                 logger.error(
                     f"""
