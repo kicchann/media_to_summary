@@ -55,7 +55,7 @@ def video_to_audio_task(task: Task) -> Task:
             update=dict(
                 status="error",
                 progress="ffmpeg takes too long time",
-                message="動画ファイルの音声ファイルへの変換中にエラーが発生しました",
+                message="動画から音声を抽出する際にエラーが発生しました",
                 audio_file_path=None,
             ),
         )

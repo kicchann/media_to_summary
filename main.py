@@ -156,27 +156,30 @@ class Handler(FileSystemEventHandler):
         while True:
             try:
                 with open(event.src_path, "rb"):
+                    if not response_file_path:
+                        raise Exception()
                     break
             except Exception as e:
-                if time.time() - current_time > 600:
-                    logger.error(
-                        f"""
-                        cannot access to {event.src_path} for 10 minutes.
-                        please check the file.
-                        """
+                if time.time() - current_time <= 600:
+                    time.sleep(1)
+                    continue
+                logger.error(
+                    f"""
+                    cannot access to {event.src_path} for 10 minutes.
+                    please check the file.
+                    """
+                )
+                self.task_queue.put(
+                    Task(
+                        status="error",
+                        progress="cannot access to response file or video file",
+                        response_file_path=response_file_path,
+                        video_file_path=event.src_path,
+                        response=response,
+                        message="回答ファイルまたは動画ファイルへのアクセスに失敗しました",
                     )
-                    self.task_queue.put(
-                        Task(
-                            status="error",
-                            progress="cannot access to video file",
-                            response_file_path=response_file_path,
-                            video_file_path=event.src_path,
-                            response=response,
-                            message="cannot access to video file",
-                        )
-                    )
-                    return
-                time.sleep(1)
+                )
+                return
 
         self.task_queue.put(
             Task(
