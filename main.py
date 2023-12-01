@@ -4,9 +4,6 @@ import os
 import time
 from typing import Callable
 
-from watchdog.events import FileSystemEventHandler
-from watchdog.observers import Observer
-
 from src import (
     clean_up,
     find_resnponse_file_path,
@@ -19,6 +16,8 @@ from src import (
 )
 from src.log.my_logger import MyLogger
 from src.model import Task
+from watchdog.events import FileSystemEventHandler
+from watchdog.observers import Observer
 
 my_logger = MyLogger(__name__)
 logger = my_logger.logger
@@ -100,7 +99,7 @@ class Watcher:
                 time.sleep(5)
                 # 結果の収集などの追加のロジックは必要に応じてここに記述
                 # 今回は結果を表示するだけ
-                if not self._result_queue.empty():
+                if self._result_queue.qsize() != 0:
                     logger.info("result_queue created")
                     result = self._result_queue.get()
                     # 結果の保存
@@ -146,7 +145,7 @@ class Handler(FileSystemEventHandler):
         video_file_name = os.path.basename(event.src_path)
 
         # 動画ファイルとresponseファイルにアクセスができるようになるまで待機
-        # 10分経ってもアクセスできない場合は，エラーとして処理を中断
+        # 15分経ってもアクセスできない場合は，エラーとして処理を中断
         current_time = time.time()
         while True:
             try:
@@ -160,12 +159,12 @@ class Handler(FileSystemEventHandler):
                 with open(event.src_path, "rb"):
                     break
             except Exception as e:
-                if time.time() - current_time <= 600:
-                    time.sleep(30)
+                if time.time() - current_time <= 15 * 60:
+                    time.sleep(60)
                     continue
                 logger.error(
                     f"""
-                    cannot access to {event.src_path} for 10 minutes.
+                    cannot access to {event.src_path} for 15 minutes.
                     please check the file.
                     """
                 )
@@ -175,7 +174,7 @@ class Handler(FileSystemEventHandler):
                         progress="cannot access to response file or video file",
                         response_file_path=response_file_path,
                         video_file_path=event.src_path,
-                        response=response,
+                        response=None,
                         message="回答ファイルまたは動画ファイルへのアクセスに失敗しました",
                     )
                 )
@@ -248,7 +247,8 @@ if __name__ == "__main__":
         worker_.start()
 
     # transcription
-    for _ in range(args.num_workers):
+    # whisperの制限により，同時に3つまでしか処理できない
+    for _ in range(3):  # args.num_workers
         worker_ = multiprocessing.Process(
             target=worker,
             args=(

@@ -2,7 +2,7 @@ import os
 import uuid
 
 from src.config import AUDIO_DIR
-from src.functions import convert_video_to_audio
+from src.functions import VideoToAudioConverter
 from src.log.my_logger import MyLogger
 from src.model import Task
 
@@ -37,13 +37,13 @@ def video_to_audio_task(task: Task) -> Task:
     os.makedirs(AUDIO_DIR, exist_ok=True)
     audio_file_path = os.path.join(AUDIO_DIR, f"{uuid.uuid4()}.mp3")
     # 動画ファイルを音声ファイルに変換
-    # ただし，1時間以上かかる場合は，エラーとする
     try:
         logger.info("start converting video to audio")
-        convert_video_to_audio(
+        converter = VideoToAudioConverter()
+        converter.convert(
             video_file_path=task.video_file_path,
             audio_file_path=audio_file_path,
-        )
+        ),
         logger.info("finish converting video to audio")
     except Exception as e:
         logger.warning(
@@ -54,7 +54,7 @@ def video_to_audio_task(task: Task) -> Task:
             deep=True,
             update=dict(
                 status="error",
-                progress="ffmpeg takes too long time",
+                progress="error occurred while converting video to audio",
                 message="動画から音声を抽出する際にエラーが発生しました",
                 audio_file_path=None,
             ),

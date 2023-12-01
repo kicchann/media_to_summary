@@ -13,8 +13,8 @@ import os
 
 
 class MyLogger:
-    def __init__(self, name):
-        log_dir = self._make_log_dir()
+    def __init__(self, name, parent_dir="src"):
+        log_dir = self._make_log_dir(parent_dir)
         self.logger = logging.getLogger(name)
         self.logger.setLevel(logging.DEBUG)
 
@@ -47,9 +47,10 @@ class MyLogger:
         # self.logger.addHandler(error_handler)
         # **/
 
-    def _make_log_dir(self) -> str:
+    @staticmethod
+    def _make_log_dir(parent_dir) -> str:
         current_dir = os.path.dirname(os.path.abspath(__file__))
-        while os.path.basename(current_dir) != "src":
+        while os.path.basename(current_dir) != parent_dir:
             current_dir = os.path.dirname(current_dir)
         log_dir = os.path.join(os.path.dirname(current_dir), "log")
         os.makedirs(log_dir, exist_ok=True)

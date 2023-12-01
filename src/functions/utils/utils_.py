@@ -18,6 +18,7 @@ from src.functions.config import (
     OPENAI_CHAT_TEMPERATURE,
     OPENAI_USE_AZURE,
     RETRY_COUNT,
+    USE_FASTER_WHISPER,
 )
 
 
@@ -115,12 +116,14 @@ def transcript_by_whisper(
     file_path: str,
     prompt: str,
     language: Union[str, None] = None,
+    use_faster_whisper: bool = False,
     openai_api_whisper_endpoint: Union[str, None] = None,
     openai_api_whisper_deployment: Union[str, None] = None,
     openai_api_whisper_api_version: Union[str, None] = None,
     retry_count: Union[int, None] = None,
 ) -> Union[str, None]:
     language = language or DEFAULT_LANGUAGE
+    use_faster_whisper = use_faster_whisper or USE_FASTER_WHISPER
     openai_api_whisper_endpoint = (
         openai_api_whisper_endpoint or OPENAI_API_WHISPER_ENDPOINT
     )
@@ -132,29 +135,31 @@ def transcript_by_whisper(
     )
     retry_count = retry_count or RETRY_COUNT
 
-    retry = 0
-    while retry < retry_count:
-        try:
-            if retry > 0:
-                print("retry: {}".format(retry))
-            # return _transcript_by_faster_whisper(
-            #     file_path,
-            #     prompt,
-            #     language,
-            # )
-            return _transcript_by_whisper(
-                file_path,
-                prompt,
-                language,
-                openai_api_whisper_endpoint,
-                openai_api_whisper_deployment,
-                openai_api_whisper_api_version,
-            )
-        except Exception as e:
-            print("An error occurred:", str(e))
-            retry += 1
-            time.sleep(5 * retry)
-            continue
+    if use_faster_whisper:
+        return _transcript_by_faster_whisper(
+            file_path,
+            prompt,
+            language,
+        )
+    else:
+        retry = 0
+        while retry < retry_count:
+            try:
+                if retry > 0:
+                    print("retry: {}".format(retry))
+                return _transcript_by_whisper(
+                    file_path,
+                    prompt,
+                    language,
+                    openai_api_whisper_endpoint,
+                    openai_api_whisper_deployment,
+                    openai_api_whisper_api_version,
+                )
+            except Exception as e:
+                print("An error occurred:", str(e))
+                retry += 1
+                time.sleep(5 * retry)
+                continue
     return None
 
 
@@ -208,7 +213,7 @@ def _transcript_by_faster_whisper(
     # user_profile = os.environ["USERPROFILE"]
     # model_size = os.path.join(
     #     user_profile,
-    #     r"Downloads\video_to_mom_streamlit\src\huggingface\hub\models--guillaumekln--faster-whisper-large-v2\snapshots\f541c54c566e32dc1fbce16f98df699208837e8b",
+    #     r"Documents\models--Systran--faster-whisper-large-v2\snapshots\f0fe81560cb8b68660e564f55dd99207059c092e",  # float32用？
     # )
     model = WhisperModel(model_size, device="cpu", compute_type="int8")
     segments, _ = model.transcribe(

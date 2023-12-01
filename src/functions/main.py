@@ -1,10 +1,9 @@
+import asyncio
 import os
 import time
-from typing import Dict, List, Union
+from typing import List, Union
 
 import ffmpeg  # type: ignore
-import timeout_decorator  # type: ignore
-
 from src.functions.config import TOKEN_LIMIT, TOKEN_SIZE_FOR_SPLIT
 from src.functions.model import AudioData, Transcription
 from src.functions.utils import (
@@ -15,16 +14,35 @@ from src.functions.utils import (
 )
 
 
-# 1時間以上かかる場合は，エラーとする
-# @timeout_decorator.timeout(3600, use_signals=False)
-def convert_video_to_audio(video_file_path: str, audio_file_path: str):
-    base_dir = os.path.dirname(os.path.dirname(__file__))
-    set_path_for_ffmpeg_bin(base_dir)
-    # ffmpeg.bin = os.path.join(os.path.dirname(os.path.dirname(__file__)), r'ffmpeg_bin\bin')
-    stream = ffmpeg.input(video_file_path)
-    stream = ffmpeg.output(stream, audio_file_path, format="mp3")
-    ffmpeg.run(stream, overwrite_output=True)
-    return
+class VideoToAudioConverter:
+    def __init__(self):
+        self._process_time = 0
+
+    def convert(self, video_file_path: str, audio_file_path: str):
+        self.__convert(
+            video_file_path=video_file_path,
+            audio_file_path=audio_file_path,
+        )
+        # self._process_time = time.time()
+        # while True:
+        #     if os.path.exists(audio_file_path):
+        #         break
+        #     if time.time() - self._process_time > 1800:
+        #         raise TimeoutError(
+        #             "video to audio conversion takes too long time. please check ffmpeg process"
+        #         )
+        #     time.sleep(1)
+
+    @staticmethod
+    def __convert(video_file_path: str, audio_file_path: str):
+        # async def __convert(video_file_path: str, audio_file_path: str):
+        base_dir = os.path.dirname(os.path.dirname(__file__))
+        set_path_for_ffmpeg_bin(base_dir)
+        # ffmpeg.bin = os.path.join(os.path.dirname(os.path.dirname(__file__)), r'ffmpeg_bin\bin')
+        stream = ffmpeg.input(video_file_path)
+        stream = ffmpeg.output(stream, audio_file_path, format="mp3")
+        ffmpeg.run(stream, overwrite_output=True)
+        return
 
 
 def split_audio(
@@ -119,6 +137,10 @@ def summarize_text(
     - In summaries, it is preferable to include the concrete numbers and facts that are important in the input text  
     - Please output in JAPANESE  
     - Please output in a markdown style structured text format  
+
+    # remarks
+
+    - The input text is a transcript that is generated from a video of a meeting or a lecture
 
     # template  
 

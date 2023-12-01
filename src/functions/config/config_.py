@@ -13,6 +13,7 @@ class TASK_STATUS(Enum):
     INTERRUPT = "interrupt"
 
 
+USE_FASTER_WHISPER = False
 OPENAI_API_WHISPER_ENDPOINT = "https://ek53-azureopenai-ncus.openai.azure.com/"
 OPENAI_API_WHISPER_DEPLOYMENT = "whisper-1"
 OPENAI_API_WHISPER_VERSION = "2023-09-01-preview"

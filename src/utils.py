@@ -1,5 +1,6 @@
 import json
 import os
+from datetime import datetime as dt
 from glob import glob
 from typing import Union
 
@@ -124,14 +125,17 @@ def save_result(result: Task):
     """
     logger.info("save_result called")
     # 処理結果情報を保存する
+    root_dir = os.path.dirname(os.path.dirname(result.response_file_path))
+    result_dir = os.path.join(root_dir, "result")
+
     if not result.response_file_path:
         logger.warning("response file path is not found")
         logger.info("finish saving result")
+        time_str = dt.now().strftime("%Y%m%d%H%M%S")
+        result_file_path = os.path.join(result_dir, f"error_{time_str}.json")
         return
 
-    root_dir = os.path.dirname(os.path.dirname(result.response_file_path))
     response_file_name = os.path.basename(result.response_file_path)
-    result_dir = os.path.join(root_dir, "result")
     result_file_path = os.path.join(result_dir, response_file_name)
 
     if not os.path.exists(result_dir):

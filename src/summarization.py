@@ -27,6 +27,7 @@ def summarization_task(task: Task) -> Task:
             add_title=task.response.add_title,
             add_todo=task.response.add_todo,
         )
+        summarization = Summarization(summary=summary)
     except Exception as e:
         logger.error("error occurred while summarizing text")
         logger.error(e)
@@ -40,7 +41,6 @@ def summarization_task(task: Task) -> Task:
             ),
         )
         return result
-    summarization = Summarization(summary=summary)
     result = task.model_copy(
         deep=True,
         update=dict(
