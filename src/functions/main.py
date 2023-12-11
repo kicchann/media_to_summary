@@ -1,10 +1,15 @@
-import asyncio
 import os
-import time
 from typing import List, Union
 
 import ffmpeg  # type: ignore
-from src.functions.config import TOKEN_LIMIT, TOKEN_SIZE_FOR_SPLIT
+from src.functions.config import (
+    MAX_DURATION_FOR_WHISPER,
+    OPENAI_API_35_ENDPOINT,
+    OPENAI_API_35_MODEL,
+    OPENAI_API_35_VERSION,
+    TOKEN_LIMIT,
+    TOKEN_SIZE_FOR_SPLIT,
+)
 from src.functions.model import AudioData, Transcription
 from src.functions.utils import (
     AudioSplitter,
@@ -69,11 +74,57 @@ def transcript_audio(
 
     transcription = Transcription(
         text="" if text is None else text,
+        keywords=description,
         speaker=audio_data.speaker,
         duration=audio_data.duration,
         start_time=audio_data.start_time,
     )
     return transcription
+
+
+def extract_keywords(transcript_text: str):
+    system_prompt = f"""  
+    # instructions  
+
+    - You are an excellent AI assistant  
+    - Show off your brilliant reasoning skills and follow the tasks below in order  
+
+    # tasks  
+
+    - Please output in JAPANESE
+    - Interpret the input text abstractly, extract keywords, and output comma-separated keywords
+    - number of keywords MUST NOT BE MORE THAN 5
+    - sort keywords in descending order of importance
+    """
+    keywords = create_chat_completion(
+        system_prompt,
+        transcript_text,
+    )
+    try:
+        keywords = keywords.split(",")[:5]
+        return ",".join(keywords)
+    except Exception as e:
+        return ""
+
+
+def process_transcription(master_prompt: str, transcript_text: str):
+    system_prompt = f"""  
+    # instructions  
+
+    - You are an excellent AI assistant  
+    - Show off your brilliant reasoning skills and follow the tasks below in order  
+
+    # tasks  
+
+    Interpret the transcripion abstractly, correct misspelled words and grammatical errors, and output the corrected text.
+    To correct misspelled words, use the following keywords to indicate what's in your transcription: {master_prompt}.
+    Output in JAPANESE.
+    """
+    keywords = create_chat_completion(
+        system_prompt,
+        transcript_text,
+    )
+    return keywords
 
 
 def compress_text(
@@ -97,25 +148,106 @@ def compress_text(
         - Show off your brilliant reasoning skills and follow the tasks below in order
 
         # tasks
+        
+        Interpret the prior input text and later input text as a single conversation, remove unnecessary expressions, correct the conversation to be grammatically correct, and compress it not to exceed the specified word count.
+        DO NOT EXCEED THE WORD COUNT LIMIT.
 
-        - Interpret the prior input text and later input text as a single conversation
-        - Please correct the conversation to be grammatically correct
-        - if total length of conversation is less than {text_token_limit} tokens, just output the conversation
-        - if total length of conversation is greater than {text_token_limit} tokens, interpret the conversation as a single document and summarize it with a max token length of {text_token_limit}
         - Please output in JAPANESE
-
+        - WORD COUNT LIMIT: {text_token_limit//2}
         """
-    all_script = "".join(
-        [
-            f"{transcription.text}: {transcription.speaker}"
-            for transcription in transcriptions
+    all_script = " ".join([transcription.text for transcription in transcriptions])
+    for i in range(len(all_script) // (split_token_length // 2) + 1):
+        if i == 0:
+            prior = all_script[
+                (split_token_length // 2) * i : (split_token_length // 2) * (i + 1)
+            ]
+            continue
+        later = all_script[
+            (split_token_length // 2) * i : (split_token_length // 2) * (i + 1)
         ]
-    )
-    for i in range(len(all_script) // split_token_length + 1):
-        later = all_script[split_token_length * i : split_token_length * (i + 1)]
         user_prompt = create_user_prompt(prior, later)
-        prior = create_chat_completion(system_prompt, user_prompt) if i > 0 else later
+        prior = create_chat_completion(
+            system_prompt,
+            user_prompt,
+            max_tokens=text_token_limit,
+            openai_api_endpoint=OPENAI_API_35_ENDPOINT,
+            openai_api_model=OPENAI_API_35_MODEL,
+            openai_api_version=OPENAI_API_35_VERSION,
+        )
     return prior
+
+
+def summarize_transcription(
+    transcriptions: List[Transcription],
+    add_title: bool,
+    add_todo: bool,
+):
+    system_prompt_1 = f"""  
+    # instructions  
+
+    - You are an excellent AI assistant  
+    - Show off your brilliant reasoning skills and follow the tasks below in order  
+
+    # tasks  
+
+    - Interpret the transcripion abstractly, summarize it without any loss of information, and output the summary with markdown bullet points
+    - Output in JAPANESE
+    - It is preferable to refer concrete numbers, expressions, and examples from the transcription as much as possible
+    """
+    summary_text = "## 要約 \n\n"
+    min_unit = MAX_DURATION_FOR_WHISPER / 60
+    for i, transcription in enumerate(transcriptions):
+        summary = create_chat_completion(
+            system_prompt_1,
+            transcription.text,
+            openai_api_endpoint=OPENAI_API_35_ENDPOINT,
+            openai_api_model=OPENAI_API_35_MODEL,
+            openai_api_version=OPENAI_API_35_VERSION,
+        )
+        summary_text += (
+            f"### {int(i*min_unit)}分-{int((i+1)*min_unit)}分ごろ \n\n" + summary + "\n\n"
+        )
+    if add_title:
+        system_prompt_2 = f"""  
+        # instructions  
+
+        - You are an excellent AI assistant  
+        - Show off your brilliant reasoning skills and follow the tasks below in order  
+
+        # tasks  
+
+        - Interpret the summary text abstractly, generate a simlple and easy-to-understand title, and output it
+        - Output in JAPANESE
+        """
+        title = create_chat_completion(
+            system_prompt_2,
+            summary_text,
+            openai_api_endpoint=OPENAI_API_35_ENDPOINT,
+            openai_api_model=OPENAI_API_35_MODEL,
+            openai_api_version=OPENAI_API_35_VERSION,
+        )
+        summary_text = "## タイトル \n\n" + title + "\n\n" + summary_text
+    if add_todo:
+        system_prompt_3 = f"""  
+        # instructions  
+
+        - You are an excellent AI assistant  
+        - Show off your brilliant reasoning skills and follow the tasks below in order  
+
+        # tasks  
+
+        - Interpret the summary text abstractly, and output the todos with markdown bullet points
+        - Output in JAPANESE
+        """
+        todo = create_chat_completion(
+            system_prompt_3,
+            summary_text,
+            openai_api_endpoint=OPENAI_API_35_ENDPOINT,
+            openai_api_model=OPENAI_API_35_MODEL,
+            openai_api_version=OPENAI_API_35_VERSION,
+        )
+        summary_text += "## TODO \n\n" + todo + "\n\n"
+    return summary_text
 
 
 def summarize_text(
@@ -132,15 +264,13 @@ def summarize_text(
 
     # tasks  
 
-    - Interpret the input text abstractly, summarizes it without losing important context, and generate a title of no more than 50 characters  
-    - Interpret the input text abstractly, summarize it without losing important context, and generate bulleted summaries of no more than {summary_length} characters in total 
-    - In summaries, it is preferable to include the concrete numbers and facts that are important in the input text  
-    - Please output in JAPANESE  
-    - Please output in a markdown style structured text format  
+    Interpret the transcripion abstractly, summarize it without any loss of information, and output the summary with bullet points.
+    TOTAL WORD COUNT RANGE MUST BE WITHIN THE SPECIFIED RANGE AS FOLLOWS.
 
-    # remarks
+    - Lower word limit: {int(summary_length*0.7)}
+    - Upper word limit: {int(summary_length*1.0)}
 
-    - The input text is a transcript that is generated from a video of a meeting or a lecture
+    Output in JAPANESE, and use the following template (markdown format) to output the summary.
 
     # template  
 
@@ -150,5 +280,9 @@ def summarize_text(
     system_prompt += "## 要約 \n- [please write summary]\n\n"
     if add_todo:
         system_prompt += "## TODO \n- [please write todo]\n\n"
-    summary = create_chat_completion(system_prompt, transcript_text)
+    summary = create_chat_completion(
+        system_prompt,
+        transcript_text,
+        max_tokens=summary_length * 2,
+    )
     return summary

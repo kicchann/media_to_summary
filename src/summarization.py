@@ -1,4 +1,4 @@
-from src.functions import compress_text, summarize_text
+from src.functions import compress_text, summarize_text, summarize_transcription
 from src.log.my_logger import MyLogger
 from src.model import Summarization, Task
 
@@ -20,13 +20,21 @@ def summarization_task(task: Task) -> Task:
     if not task.transcriptions or not task.response:
         return task
     try:
-        compressed_text = compress_text(task.transcriptions)
-        summary = summarize_text(
-            transcript_text=compressed_text,
-            summary_length=task.response.summary_length,
+        logger.info("summarizing text")
+        summary = summarize_transcription(
+            transcriptions=task.transcriptions,
             add_title=task.response.add_title,
             add_todo=task.response.add_todo,
         )
+        # logger.info("compressing text")
+        # compressed_text = compress_text(task.transcriptions)
+        # logger.info("summarizing text")
+        # summary = summarize_text(
+        #     transcript_text=compressed_text,
+        #     summary_length=task.response.summary_length,
+        #     add_title=task.response.add_title,
+        #     add_todo=task.response.add_todo,
+        # )
         summarization = Summarization(summary=summary)
     except Exception as e:
         logger.error("error occurred while summarizing text")

@@ -1,4 +1,6 @@
-from src.functions import transcript_audio
+import json
+
+from src.functions import extract_keywords, process_transcription, transcript_audio
 from src.log.my_logger import MyLogger
 from src.model import Task
 
@@ -20,9 +22,32 @@ def transcription_task(task: Task) -> Task:
     transcriptions = []
     if not task.audio_data_list:
         return task
-    for audio_data in task.audio_data_list:
+    for i, audio_data in enumerate(task.audio_data_list):
+        logger.info(f"transcription_task: {i+1}/{len(task.audio_data_list)}")
+        logger.info(f"start_time: {audio_data.start_time}")
+        logger.info(f"duration: {audio_data.duration}")
+        prompt_dict = {
+            "info_from_user": extract_keywords(task.response.description),
+        }
+        if i > 0:
+            prompt_dict["previous_transcription"] = extract_keywords(
+                transcriptions[-1].text
+            )
+        logger.info(f"prompt_dict: {prompt_dict}")
         try:
-            transcriptions += [transcript_audio(audio_data)]
+            transcription_base = transcript_audio(
+                audio_data=audio_data,
+                description=",".join(list(prompt_dict.values())),
+            )
+            transcription = transcription_base.model_copy(
+                update=dict(
+                    text=process_transcription(
+                        master_prompt=transcription_base.keywords,
+                        transcript_text=transcription_base.text,
+                    ),
+                )
+            )
+            transcriptions += [transcription]
         except Exception as e:
             logger.error("error occurred while transcribing audio file")
             logger.error(f"audio_data: {audio_data}")

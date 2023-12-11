@@ -22,11 +22,15 @@ class MyLogger:
             "%(asctime)s : %(levelname)s : %(name)s : %(funcName)s  - line:%(lineno)d - %(message)s"
         )
         main_file_path = os.path.join(log_dir, "main.log")
-        main_handler = logging.handlers.RotatingFileHandler(
+        # main_handler = logging.handlers.TimedRotatingFileHandler(
+        #     filename=main_file_path,
+        #     when="m",
+        #     encoding="utf-8",
+        #     backupCount=3,
+        # )
+        main_handler = logging.FileHandler(
             filename=main_file_path,
             encoding="utf-8",
-            maxBytes=10**7,
-            backupCount=3,
         )
         main_handler.setLevel(logging.INFO)
         main_handler.setFormatter(formatter)

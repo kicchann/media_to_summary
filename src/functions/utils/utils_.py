@@ -2,16 +2,15 @@ import os
 import random
 import string
 import time
-from typing import Union
+from typing import List, Union
 
 import openai
 import requests
-
 from src.functions.config import (
     DEFAULT_LANGUAGE,
-    OPENAI_API_ENDPOINT,
-    OPENAI_API_MODEL,
-    OPENAI_API_VERSION,
+    OPENAI_API_35_ENDPOINT,
+    OPENAI_API_35_MODEL,
+    OPENAI_API_35_VERSION,
     OPENAI_API_WHISPER_DEPLOYMENT,
     OPENAI_API_WHISPER_ENDPOINT,
     OPENAI_API_WHISPER_VERSION,
@@ -39,6 +38,7 @@ def set_path_for_ffmpeg_bin(base_dir: str):
 def create_chat_completion(
     system_prompt: str,
     user_prompt: str,
+    max_tokens: Union[int, None] = None,
     temperature: Union[float, None] = None,
     openai_use_azure: Union[bool, None] = None,
     openai_api_endpoint: Union[str, None] = None,
@@ -47,9 +47,9 @@ def create_chat_completion(
     retry_count: Union[int, None] = None,
 ):
     openai_use_azure = openai_use_azure or OPENAI_USE_AZURE
-    openai_api_endpoint = openai_api_endpoint or OPENAI_API_ENDPOINT
-    openai_api_version = openai_api_version or OPENAI_API_VERSION
-    openai_api_model = openai_api_model or OPENAI_API_MODEL
+    openai_api_endpoint = openai_api_endpoint or OPENAI_API_35_ENDPOINT  # GPT3.5を使う
+    openai_api_version = openai_api_version or OPENAI_API_35_VERSION  # GPT3.5を使う
+    openai_api_model = openai_api_model or OPENAI_API_35_MODEL  # GPT3.5を使う
     temperature = temperature or OPENAI_CHAT_TEMPERATURE
     retry_count = retry_count or RETRY_COUNT
 
@@ -61,6 +61,7 @@ def create_chat_completion(
             return _create_chat_completion(
                 system_prompt,
                 user_prompt,
+                max_tokens,
                 temperature,
                 openai_use_azure,
                 openai_api_endpoint,
@@ -78,6 +79,7 @@ def create_chat_completion(
 def _create_chat_completion(
     system_prompt: str,
     user_prompt: str,
+    max_tokens: Union[int, None],
     temperature: float,
     openai_use_azure: bool,
     openai_api_endpoint: str,
@@ -100,23 +102,43 @@ def _create_chat_completion(
     openai.api_type = "azure" if openai_use_azure else "openai"
     openai.api_version = openai_api_version
     openai.azure_endpoint = openai_api_endpoint
-    openai.api_key = os.environ["OPENAI_API_KEY"]
+    openai.api_key = os.environ["OPENAI_API_35_KEY"]
+    need_continue: bool = False
+    contents: List[str] = []
     response = openai.chat.completions.create(
         model=openai_api_model,
         messages=[
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt},
         ],
+        max_tokens=max_tokens,
         temperature=temperature,
     )
-    return response.choices[0].message.content
+    content = response.choices[0].message.content
+    contents.append(content)
+    if response.choices[0].finish_reason == "length":
+        need_continue = True
+    while need_continue:
+        response = openai.chat.completions.create(
+            model=openai_api_model,
+            messages=[
+                {"role": "user", "content": user_prompt},
+                {"role": "assistant", "content": contents[-1]},
+            ],
+            temperature=temperature,
+        )
+        content = response.choices[0].message.content
+        contents.append(content)
+        if response.choices[0].finish_reason != "length":
+            need_continue = False
+    return "".join(contents)
 
 
 def transcript_by_whisper(
     file_path: str,
     prompt: str,
     language: Union[str, None] = None,
-    use_faster_whisper: bool = False,
+    use_faster_whisper: bool = None,
     openai_api_whisper_endpoint: Union[str, None] = None,
     openai_api_whisper_deployment: Union[str, None] = None,
     openai_api_whisper_api_version: Union[str, None] = None,
