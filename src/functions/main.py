@@ -93,6 +93,8 @@ def extract_keywords(transcript_text: str):
 
     - Please output in JAPANESE
     - Interpret the input text abstractly, extract keywords, and output comma-separated keywords
+    - output only keywords of nouns, verbs, and adjectives.
+    - DO NOT OUTPUT ANY OTHER WORDS BUT JUST KEYWORDS
     - number of keywords MUST NOT BE MORE THAN 5
     - sort keywords in descending order of importance
     """
@@ -204,9 +206,13 @@ def summarize_transcription(
             openai_api_model=OPENAI_API_35_MODEL,
             openai_api_version=OPENAI_API_35_VERSION,
         )
-        summary_text += (
-            f"### {int(i*min_unit)}分-{int((i+1)*min_unit)}分ごろ \n\n" + summary + "\n\n"
+        start_time = transcription.start_time
+        end_time = transcription.start_time + transcription.duration
+        start_min = (
+            f"{str(int(start_time//60)).zfill(2)}:{str(int(start_time%60)).zfill(2)}"
         )
+        end_min = f"{str(int(end_time//60)).zfill(2)}:{str(int(end_time%60)).zfill(2)}"
+        summary_text += f"### {start_min} - {end_min}ごろ \n\n" + summary + "\n\n"
     if add_title:
         system_prompt_2 = f"""  
         # instructions  
@@ -237,6 +243,7 @@ def summarize_transcription(
         # tasks  
 
         - Interpret the summary text abstractly, and output the todos with markdown bullet points
+        - Just output bullet points, do not output the heading
         - Output in JAPANESE
         """
         todo = create_chat_completion(

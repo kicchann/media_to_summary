@@ -84,10 +84,9 @@ class AudioSplitter:
         # chunkがmax_lengthを超えない最大の長さになるように，chunkを結合する
         # 結合したchunkを，mp3ファイルを出力する
         new_chunk = None
-        start_time = 0
+        start_time = 0.0
         audio_data_list: List[AudioData] = []
         for chunk in chunks:
-            start_time += chunk.duration_seconds
             # 0.3s以下のchunkは無視する
             if chunk.duration_seconds <= 0.3:
                 continue
@@ -107,6 +106,7 @@ class AudioSplitter:
                         duration=new_chunk.duration_seconds,
                     )
                 ]
+                start_time += new_chunk.duration_seconds
                 new_chunk = chunk
             else:
                 new_chunk += chunk
