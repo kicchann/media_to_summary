@@ -2,7 +2,7 @@ import os
 import uuid
 
 from src.config import AUDIO_DIR
-from src.functions import VideoToAudioConverter
+from src.functions import MediaToAudioConverter
 from src.log.my_logger import MyLogger
 from src.model import Task
 
@@ -10,7 +10,7 @@ my_logger = MyLogger(__name__)
 logger = my_logger.logger
 
 
-def video_to_audio_task(task: Task) -> Task:
+def media_to_audio_task(task: Task) -> Task:
     """
     動画ファイルを音声ファイルに変換する関数
 
@@ -19,16 +19,16 @@ def video_to_audio_task(task: Task) -> Task:
     Returns:
         Task: 処理結果のタスク
     """
-    logger.info("video_to_audio_task called")
+    logger.info("media_to_audio_task called")
 
-    if not task.video_file_path or not os.path.exists(str(task.video_file_path)):
-        logger.warning("{task.video_file_path} does not exist")
+    if not task.media_file_path or not os.path.exists(str(task.media_file_path)):
+        logger.warning("{task.media_file_path} does not exist")
         result = task.model_copy(
             deep=True,
             update=dict(
                 status="error",
-                progress="video file does not exist",
-                message="動画ファイルが見つかりません",
+                progress="media file does not exist",
+                message="メディアファイルが見つかりません",
                 audio_file_path=None,
             ),
         )
@@ -38,24 +38,24 @@ def video_to_audio_task(task: Task) -> Task:
     audio_file_path = os.path.join(AUDIO_DIR, f"{uuid.uuid4()}.mp3")
     # 動画ファイルを音声ファイルに変換
     try:
-        logger.info("start converting video to audio")
-        converter = VideoToAudioConverter()
-        converter.convert(
-            video_file_path=task.video_file_path,
+        logger.info("start converting media to audio")
+        converter = MediaToAudioConverter()
+        audio_file_path = converter.convert(
+            media_file_path=task.media_file_path,
             audio_file_path=audio_file_path,
-        ),
-        logger.info("finish converting video to audio")
+        )
+        logger.info("finish converting media to audio")
     except Exception as e:
         logger.warning(
-            "error occurred while converting video to audio. error may occur when ffmpeg takes too long time"
+            "error occurred while converting to audio. error may occur when ffmpeg takes too long time"
         )
         logger.warning(e)
         result = task.model_copy(
             deep=True,
             update=dict(
                 status="error",
-                progress="error occurred while converting video to audio",
-                message="動画から音声を抽出する際にエラーが発生しました",
+                progress="error occurred while converting to audio",
+                message="音声を抽出する際にエラーが発生しました",
                 audio_file_path=None,
             ),
         )
@@ -69,5 +69,5 @@ def video_to_audio_task(task: Task) -> Task:
             audio_file_path=audio_file_path,
         ),
     )
-    logger.info("video_to_audio_task finished")
+    logger.info("media_to_audio_task finished")
     return result

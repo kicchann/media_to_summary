@@ -22,7 +22,11 @@ def split_audio_task(task: Task) -> Task:
 
     os.makedirs(SPLIT_AUDIO_DIR, exist_ok=True)
     try:
-        audio_data_list = split_audio(str(task.audio_file_path), SPLIT_AUDIO_DIR)
+        audio_data_list = split_audio(
+            audio_file_path=str(task.audio_file_path),
+            split_audio_dir=SPLIT_AUDIO_DIR,
+            use_last_10_mins_only=task.response.use_last_10_mins_only,
+        )
     except Exception as e:
         logger.error("error occurred while splitting audio file")
         logger.error(e)

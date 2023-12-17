@@ -39,7 +39,9 @@ class AudioSplitter:
         self,
         audio_file_path: str,
         split_audio_dir: str,
+        use_last_10_mins_only: Union[bool, None] = None,
     ) -> List[AudioData]:
+        use_last_10_mins_only = use_last_10_mins_only or False
         # audio_file_pathから拡張子を取得してformatに指定する
         _, ext = os.path.splitext(audio_file_path)
         format = ext.lstrip(".")
@@ -82,16 +84,51 @@ class AudioSplitter:
         )
 
         # chunkがmax_lengthを超えない最大の長さになるように，chunkを結合する
-        # 結合したchunkを，mp3ファイルを出力する
+        # 結合したchunkを，wav形式で出力する
         new_chunk = None
         start_time = 0.0
+        duration_seconds = 0.0
         audio_data_list: List[AudioData] = []
+        # まず、use_last_10_mins_onlyがTrueの場合は、最後の10分だけを抽出する
+        if use_last_10_mins_only:
+            start_time = total_duration
+            for chunk in chunks[::-1]:
+                # 0.3s以下のchunkは無視する
+                if chunk.duration_seconds <= 0.3:
+                    duration_seconds += chunk.duration_seconds
+                    continue
+                if new_chunk is None:
+                    new_chunk = chunk
+                    duration_seconds += chunk.duration_seconds
+                    continue
+                if new_chunk.duration_seconds + chunk.duration_seconds > 600:
+                    audio_data_id = str(uuid.uuid4())
+                    split_audio_file_path = os.path.join(
+                        split_audio_dir, f"{audio_data_id}.{format}"
+                    )
+                    new_chunk.export(split_audio_file_path, format=format)
+                    start_time -= new_chunk.duration_seconds
+                    audio_data_list += [
+                        AudioData(
+                            file_path=split_audio_file_path,
+                            start_time=start_time,
+                            duration=new_chunk.duration_seconds,
+                        )
+                    ]
+                    return audio_data_list
+                else:
+                    new_chunk = chunk + new_chunk
+                    duration_seconds += chunk.duration_seconds
+
+        # use_last_10_mins_onlyがFalseの場合は、最大の長さになるようにchunkを結合する
         for chunk in chunks:
             # 0.3s以下のchunkは無視する
             if chunk.duration_seconds <= 0.3:
+                duration_seconds += chunk.duration_seconds
                 continue
             if new_chunk is None:
                 new_chunk = chunk
+                duration_seconds += chunk.duration_seconds
                 continue
             if new_chunk.duration_seconds + chunk.duration_seconds > max_duration:
                 audio_data_id = str(uuid.uuid4())
@@ -103,13 +140,15 @@ class AudioSplitter:
                     AudioData(
                         file_path=split_audio_file_path,
                         start_time=start_time,
-                        duration=new_chunk.duration_seconds,
+                        duration=duration_seconds,
                     )
                 ]
-                start_time += new_chunk.duration_seconds
+                start_time += duration_seconds
                 new_chunk = chunk
+                duration_seconds = chunk.duration_seconds
             else:
                 new_chunk += chunk
+                duration_seconds += chunk.duration_seconds
         if new_chunk is not None:
             audio_data_id = str(uuid.uuid4())
             split_audio_file_path = os.path.join(
@@ -120,7 +159,7 @@ class AudioSplitter:
                 AudioData(
                     file_path=split_audio_file_path,
                     start_time=start_time,
-                    duration=new_chunk.duration_seconds,
+                    duration=duration_seconds,
                 )
             ]
         return audio_data_list

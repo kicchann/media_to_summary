@@ -1,7 +1,7 @@
 from pydantic import BaseModel
 
 
-class VideoInfo(BaseModel):
+class MediaInfo(BaseModel):
     name: str
     link: str
     id: str

@@ -21,14 +21,6 @@ from src.functions.config import (
 )
 
 
-def create_id(length: int = 8) -> str:
-    # 大文字、小文字のアルファベットと数字を含む文字列を作成
-    characters = string.ascii_letters + string.digits
-    # この文字列からランダムに8文字選び、新しい文字列を作成
-    random_string = "".join(random.choice(characters) for _ in range(length))
-    return random_string
-
-
 def set_path_for_ffmpeg_bin(base_dir: str):
     # set PATH for ffmpeg
     ffmpeg_path = os.path.join(base_dir, "ffmpeg_bin", "bin")
@@ -45,7 +37,7 @@ def create_chat_completion(
     openai_api_version: Union[str, None] = None,
     openai_api_model: Union[str, None] = None,
     retry_count: Union[int, None] = None,
-):
+) -> Union[str, None]:
     openai_use_azure = openai_use_azure or OPENAI_USE_AZURE
     openai_api_endpoint = openai_api_endpoint or OPENAI_API_35_ENDPOINT  # GPT3.5を使う
     openai_api_version = openai_api_version or OPENAI_API_35_VERSION  # GPT3.5を使う
@@ -85,7 +77,7 @@ def _create_chat_completion(
     openai_api_endpoint: str,
     openai_api_version: str,
     openai_api_model: str,
-):
+) -> str:
     # # openaiの場合
     # openai.api_key = os.environ["OPENAI_API_KEY"]
     # response = openai.chat.completions.create(
@@ -102,7 +94,11 @@ def _create_chat_completion(
     openai.api_type = "azure" if openai_use_azure else "openai"
     openai.api_version = openai_api_version
     openai.azure_endpoint = openai_api_endpoint
-    openai.api_key = os.environ["OPENAI_API_35_KEY"]
+    openai.api_key = (
+        os.environ["OPENAI_API_KEY"]
+        if "gpt-4" in openai_api_model
+        else os.environ["OPENAI_API_35_KEY"]
+    )
     need_continue: bool = False
     contents: List[str] = []
     response = openai.chat.completions.create(
@@ -169,7 +165,7 @@ def transcript_by_whisper(
             try:
                 if retry > 0:
                     print("retry: {}".format(retry))
-                return _transcript_by_whisper(
+                return _transcript_by_azure_whisper(
                     file_path,
                     prompt,
                     language,
@@ -185,7 +181,7 @@ def transcript_by_whisper(
     return None
 
 
-def _transcript_by_whisper(
+def _transcript_by_azure_whisper(
     file_path: str,
     prompt: str,
     language: str,
@@ -193,15 +189,6 @@ def _transcript_by_whisper(
     openai_api_whisper_deployment: str,
     openai_api_whisper_api_version: str,
 ) -> Union[str, None]:
-    # # openaiの場合
-    # with open(file_path, "rb") as f:
-    #     transcript = openai.audio.transcriptions.create(
-    #         file=f,
-    #         model="whisper-1",
-    #         prompt=prompt,
-    #         language=language,
-    #     )
-
     # azureの場合
     # url = "https://ek53-azureopenai-ncus.openai.azure.com/openai/deployments/whisper-1/audio/transcriptions?api-version=2023-09-01-preview"
     url = "{}openai/deployments/{}/audio/transcriptions?api-version={}".format(
@@ -213,7 +200,7 @@ def _transcript_by_whisper(
         "content_type": "multipart/form-data",  # "multipart/form-data; boundary=----WebKitFormBoundary7MA4YWxkTrZu0gW",
         "api-key": os.getenv("OPENAI_API_WHISPER_KEY"),
     }
-    data = {"prompt": prompt, "language": language}
+    data = {"prompt": prompt, "language": language, "response_format": "verbose_json"}
     with open(file_path, "rb") as f:
         transcript = requests.post(
             url, headers=headers, data=data, files=[("file", f)]

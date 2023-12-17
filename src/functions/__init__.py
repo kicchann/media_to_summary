@@ -1,5 +1,5 @@
 from .main import (
-    VideoToAudioConverter,
+    MediaToAudioConverter,
     compress_text,
     extract_keywords,
     process_transcription,

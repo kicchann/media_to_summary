@@ -1,4 +1,4 @@
-# video_to_summary_prod
+# media_to_summary_prod
 
 - 2023/11/28
   - 作成
@@ -14,10 +14,13 @@
   - whisperのprompt入れ忘れ解消
   - クライアントが入力した事前情報は、keywordにしてpromptへ流すことにした
   - 音声を分割した場合は直前の音声情報もkeywordにしてpromptへ流すことにした
+- 2023/12/17
+  - 命名の変更
+
 
 ## 概要
 
-`video_to_summary_prod` は指定されたディレクトリを監視して，動画ファイルが投稿されたら音声データの抽出・文字起こしをした上で，要約を行うモジュール．作者はMS Forms上に動画と要約の条件を入力するフォームを作成して，
+`media_to_summary_prod` は指定されたディレクトリを監視して，動画ファイルが投稿されたら音声データの抽出・文字起こしをした上で，要約を行うモジュール．作者はMS Forms上に動画と要約の条件を入力するフォームを作成して，
 このモジュールで動画を変換した．ファイルの移動や作成にはPowerAutomateを使用している．  
 モジュールでは，
 
@@ -30,10 +33,10 @@
 
 ## インストール
 
-To install `video_to_summary_prod`, follow these steps:
+To install `media_to_summary_prod`, follow these steps:
 
-1. Clone the repository: `git clone https://github.com/yourusername/video_to_summary_prod.git`
-2. Navigate to the project directory: `cd video_to_summary_prod`
+1. Clone the repository: `git clone https://github.com/yourusername/media_to_summary_prod.git`
+2. Navigate to the project directory: `cd media_to_summary_prod`
 3. Install the required packages: `pip install -r requirements.txt`
 
 ## 使い方
@@ -44,7 +47,7 @@ To install `video_to_summary_prod`, follow these steps:
    ```directory
     root_dir
     ├── response ← MS Formsの回答保管
-    ├── video ← 動画保管
+    ├── media ← 動画保管
     └── result ← 要約結果保管
    ```
 2. 環境変数としてOPENAI_API_KEYと，OPENAI_API_WHISPER_KEYを準備．  

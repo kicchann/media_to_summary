@@ -1,4 +1,5 @@
 import os
+import shutil
 from typing import List, Union
 
 import ffmpeg  # type: ignore
@@ -7,6 +8,9 @@ from src.functions.config import (
     OPENAI_API_35_ENDPOINT,
     OPENAI_API_35_MODEL,
     OPENAI_API_35_VERSION,
+    OPENAI_API_ENDPOINT,
+    OPENAI_API_MODEL,
+    OPENAI_API_VERSION,
     TOKEN_LIMIT,
     TOKEN_SIZE_FOR_SPLIT,
 )
@@ -19,35 +23,53 @@ from src.functions.utils import (
 )
 
 
-class VideoToAudioConverter:
+class MediaToAudioConverter:
     def __init__(self):
         self._process_time = 0
 
-    def convert(self, video_file_path: str, audio_file_path: str):
+    def convert(self, media_file_path: str, audio_file_path: str):
+        # 動画ファイルが入力された場合は，音声ファイルに変換する
+        # 音声ファイルが入力された場合は，そのまま返す
+        # 条件分岐が必要かと思いきや、ffmpegは動画ファイルを入力すると音声ファイルに変換してくれるし、
+        # 音声ファイルを入力するとそのまま音声ファイルを返してくれる
+        # 拡張子が.mp3だからか？
         self.__convert(
-            video_file_path=video_file_path,
+            media_file_path=media_file_path,
             audio_file_path=audio_file_path,
         )
-        # self._process_time = time.time()
-        # while True:
-        #     if os.path.exists(audio_file_path):
-        #         break
-        #     if time.time() - self._process_time > 1800:
-        #         raise TimeoutError(
-        #             "video to audio conversion takes too long time. please check ffmpeg process"
-        #         )
-        #     time.sleep(1)
+        return audio_file_path
 
     @staticmethod
-    def __convert(video_file_path: str, audio_file_path: str):
-        # async def __convert(video_file_path: str, audio_file_path: str):
+    def __convert(media_file_path: str, audio_file_path: str):
+        # async def __convert(media_file_path: str, audio_file_path: str):
         base_dir = os.path.dirname(os.path.dirname(__file__))
         set_path_for_ffmpeg_bin(base_dir)
         # ffmpeg.bin = os.path.join(os.path.dirname(os.path.dirname(__file__)), r'ffmpeg_bin\bin')
-        stream = ffmpeg.input(video_file_path)
+        stream = ffmpeg.input(media_file_path)
+        # TODO: 音量正規化
+        # stream = ffmpeg.filter(stream, "loudnorm")
         stream = ffmpeg.output(stream, audio_file_path, format="mp3")
         ffmpeg.run(stream, overwrite_output=True)
         return
+
+    @staticmethod
+    def __media_or_audio(file_path):
+        try:
+            probe = ffmpeg.probe(file_path)
+            video_streams = [
+                stream for stream in probe["streams"] if stream["codec_type"] == "video"
+            ]
+            audio_streams = [
+                stream for stream in probe["streams"] if stream["codec_type"] == "audio"
+            ]
+            if video_streams:
+                return "video"
+            elif audio_streams:
+                return "audio"
+            else:
+                raise Exception("file is not video or audio")
+        except ffmpeg.Error as e:
+            raise e
 
 
 def split_audio(
@@ -62,7 +84,11 @@ def split_audio(
         silence_thresh=kwargs.get("silence_thresh"),
         keep_silence=kwargs.get("keep_silence"),
     )
-    return audio_splitter.split(audio_file_path, split_audio_dir)
+    return audio_splitter.split(
+        audio_file_path,
+        split_audio_dir,
+        use_last_10_mins_only=kwargs.get("use_last_10_mins_only"),
+    )
 
 
 def transcript_audio(
@@ -83,20 +109,10 @@ def transcript_audio(
 
 
 def extract_keywords(transcript_text: str):
-    system_prompt = f"""  
-    # instructions  
-
-    - You are an excellent AI assistant  
-    - Show off your brilliant reasoning skills and follow the tasks below in order  
-
-    # tasks  
-
-    - Please output in JAPANESE
-    - Interpret the input text abstractly, extract keywords, and output comma-separated keywords
-    - output only keywords of nouns, verbs, and adjectives.
-    - DO NOT OUTPUT ANY OTHER WORDS BUT JUST KEYWORDS
-    - number of keywords MUST NOT BE MORE THAN 5
-    - sort keywords in descending order of importance
+    system_prompt = f"""
+    You are a highly skilled AI. 
+    Your task is to analyze the following text, extract up to 5 important Japanese keywords, and list them in order of importance. 
+    Output only comma-separated keywords. here is the text:
     """
     keywords = create_chat_completion(
         system_prompt,
@@ -172,9 +188,6 @@ def compress_text(
             system_prompt,
             user_prompt,
             max_tokens=text_token_limit,
-            openai_api_endpoint=OPENAI_API_35_ENDPOINT,
-            openai_api_model=OPENAI_API_35_MODEL,
-            openai_api_version=OPENAI_API_35_VERSION,
         )
     return prior
 
@@ -184,76 +197,99 @@ def summarize_transcription(
     add_title: bool,
     add_todo: bool,
 ):
-    system_prompt_1 = f"""  
-    # instructions  
-
-    - You are an excellent AI assistant  
-    - Show off your brilliant reasoning skills and follow the tasks below in order  
-
-    # tasks  
-
-    - Interpret the transcripion abstractly, summarize it without any loss of information, and output the summary with markdown bullet points
-    - Output in JAPANESE
-    - It is preferable to refer concrete numbers, expressions, and examples from the transcription as much as possible
+    system_prompt_1 = f"""
+    You are a highly skilled AI. Your task is to analyze the following transcription, summarize it without losing any important information, and present the summary in markdown bullet points in Japanese. When possible, include specific numbers, expressions, and examples from the transcription in your summary. Here is the transcription:
     """
-    summary_text = "## 要約 \n\n"
-    min_unit = MAX_DURATION_FOR_WHISPER / 60
-    for i, transcription in enumerate(transcriptions):
-        summary = create_chat_completion(
-            system_prompt_1,
-            transcription.text,
-            openai_api_endpoint=OPENAI_API_35_ENDPOINT,
-            openai_api_model=OPENAI_API_35_MODEL,
-            openai_api_version=OPENAI_API_35_VERSION,
-        )
+    # system_prompt_1 = f"""
+    # # instructions
+
+    # - You are an excellent AI assistant
+    # - Show off your brilliant reasoning skills and follow the tasks below in order
+
+    # # tasks
+
+    # - Interpret the transcripion abstractly, summarize it without any loss of information, and output the summary with markdown bullet points
+    # - Output in JAPANESE
+    # - It is preferable to refer concrete numbers, expressions, and examples from the transcription as much as possible
+    # """
+    summary_header = "## 要約 \n\n"
+    summaries = []
+    for transcription in transcriptions:
+        if len(transcriptions) == 1:
+            summary = create_chat_completion(
+                system_prompt_1,
+                transcription.text,
+                openai_api_endpoint=OPENAI_API_35_ENDPOINT,
+                openai_api_version=OPENAI_API_35_VERSION,
+                openai_api_model=OPENAI_API_35_MODEL,
+            )
+        else:
+            summary = create_chat_completion(
+                system_prompt_1,
+                transcription.text,
+            )
         start_time = transcription.start_time
         end_time = transcription.start_time + transcription.duration
         start_min = (
             f"{str(int(start_time//60)).zfill(2)}:{str(int(start_time%60)).zfill(2)}"
         )
         end_min = f"{str(int(end_time//60)).zfill(2)}:{str(int(end_time%60)).zfill(2)}"
-        summary_text += f"### {start_min} - {end_min}ごろ \n\n" + summary + "\n\n"
+        summaries.append(
+            {
+                "start_min": start_min,
+                "end_min": end_min,
+                "summary": summary,
+            }
+        )
+        summary_text = summary_header + "\n\n".join(
+            [
+                f"### {i+1} / {len(summaries)}\n\n{summary['summary']}"
+                for i, summary in enumerate(summaries)
+            ]
+        )
     if add_title:
-        system_prompt_2 = f"""  
-        # instructions  
-
-        - You are an excellent AI assistant  
-        - Show off your brilliant reasoning skills and follow the tasks below in order  
-
-        # tasks  
-
-        - Interpret the summary text abstractly, generate a simlple and easy-to-understand title, and output it
-        - Output in JAPANESE
+        title_header = "## タイトル \n\n"
+        system_prompt_2 = f"""
+        You are a highly skilled AI. Your task is to analyze the following Japanese summary, then generate a simple and easy-to-understand title in Japanese. Output title text only. Here is the summary:
         """
+        # system_prompt_2 = f"""
+        # # instructions
+
+        # - You are an excellent AI assistant
+        # - Show off your brilliant reasoning skills and follow the tasks below in order
+
+        # # tasks
+
+        # - Interpret the summary text abstractly, generate a simlple and easy-to-understand title, and output it
+        # - Output in JAPANESE
+        # """
         title = create_chat_completion(
             system_prompt_2,
-            summary_text,
-            openai_api_endpoint=OPENAI_API_35_ENDPOINT,
-            openai_api_model=OPENAI_API_35_MODEL,
-            openai_api_version=OPENAI_API_35_VERSION,
+            "\n".join([summary["summary"] for summary in summaries]),
         )
-        summary_text = "## タイトル \n\n" + title + "\n\n" + summary_text
+        summary_text = title_header + title + "\n\n" + summary_text
     if add_todo:
-        system_prompt_3 = f"""  
-        # instructions  
-
-        - You are an excellent AI assistant  
-        - Show off your brilliant reasoning skills and follow the tasks below in order  
-
-        # tasks  
-
-        - Interpret the summary text abstractly, and output the todos with markdown bullet points
-        - Just output bullet points, do not output the heading
-        - Output in JAPANESE
+        todo_header = "\n\n## TODO \n\n"
+        system_prompt_3 = f"""
+        You are a highly skilled AI. Your task is to analyze the following summary and generate a list of tasks from it. Output only important tasks that require concrete action for simplicity and efficiency. Output only tasks in markdown bullet points in Japanese. Here is the summary:
         """
+        # system_prompt_3 = f"""
+        # # instructions
+
+        # - You are an excellent AI assistant
+        # - Show off your brilliant reasoning skills and follow the tasks below in order
+
+        # # tasks
+
+        # - Interpret the summary text abstractly, and output the todos with markdown bullet points
+        # - Just output bullet points, do not output the heading
+        # - Output in JAPANESE
+        # """
         todo = create_chat_completion(
             system_prompt_3,
             summary_text,
-            openai_api_endpoint=OPENAI_API_35_ENDPOINT,
-            openai_api_model=OPENAI_API_35_MODEL,
-            openai_api_version=OPENAI_API_35_VERSION,
         )
-        summary_text += "## TODO \n\n" + todo + "\n\n"
+        summary_text += todo_header + todo
     return summary_text
 
 
