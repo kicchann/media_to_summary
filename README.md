@@ -18,6 +18,12 @@
   - 命名の変更
 - 2023/12/18
   - なんちゃって話者識別（mfcc + k-means）の実装
+- 2023/12/19
+  - taskにidを追加
+  - log出力の削減（文字起こしをなくした）
+  - logにtask idを出力
+  - transcriptionのstart, endを修正
+  - バグ修正
 
 
 ## 概要

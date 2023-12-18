@@ -19,10 +19,10 @@ def media_to_audio_task(task: Task) -> Task:
     Returns:
         Task: 処理結果のタスク
     """
-    logger.info("media_to_audio_task called")
+    logger.info(f"{task.id_} - media_to_audio_task called")
 
     if not task.media_file_path or not os.path.exists(str(task.media_file_path)):
-        logger.warning("{task.media_file_path} does not exist")
+        logger.warning(f"{task.id_} - {task.media_file_path} does not exist")
         result = task.model_copy(
             deep=True,
             update=dict(
@@ -38,18 +38,18 @@ def media_to_audio_task(task: Task) -> Task:
     audio_file_path = os.path.join(AUDIO_DIR, f"{uuid.uuid4()}.mp3")
     # 動画ファイルを音声ファイルに変換
     try:
-        logger.info("start converting media to audio")
+        logger.info(f"{task.id_} - start converting media to audio")
         converter = MediaToAudioConverter()
         audio_file_path = converter.convert(
             media_file_path=task.media_file_path,
             audio_file_path=audio_file_path,
         )
-        logger.info("finish converting media to audio")
+        logger.info(f"{task.id_} - finish converting media to audio")
     except Exception as e:
         logger.warning(
-            "error occurred while converting to audio. error may occur when ffmpeg takes too long time"
+            f"{task.id_} - error occurred while converting to audio. error may occur when ffmpeg takes too long time"
         )
-        logger.warning(e)
+        logger.warning(f"{task.id_} - {e}")
         result = task.model_copy(
             deep=True,
             update=dict(
@@ -69,5 +69,5 @@ def media_to_audio_task(task: Task) -> Task:
             audio_file_path=audio_file_path,
         ),
     )
-    logger.info("media_to_audio_task finished")
+    logger.info(f"{task.id_} - media_to_audio_task finished")
     return result

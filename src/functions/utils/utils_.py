@@ -1,3 +1,4 @@
+import asyncio
 import os
 import tempfile
 import time
@@ -204,8 +205,8 @@ def _transcript_by_azure_whisper(
         "content_type": "multipart/form-data",  # "multipart/form-data; boundary=----WebKitFormBoundary7MA4YWxkTrZu0gW",
         "api-key": os.getenv("OPENAI_API_WHISPER_KEY"),
     }
-    data = {"prompt": prompt, "response_format": "verbose_json"}
-    # data = {"prompt": prompt, "language": language, "response_format": "verbose_json"}
+    # data = {"prompt": prompt, "response_format": "verbose_json"}
+    data = {"prompt": prompt, "language": language, "response_format": "verbose_json"}
     try:
         with open(file_path, "rb") as f:
             transcript = requests.post(
@@ -261,7 +262,6 @@ def get_features_of_voice(file_path: str, transcript_list: list) -> list:
     format = file_path.split(".")[-1]
     sound = AudioSegment.from_file(file_path, format=format)
     features = []
-    print("getting features of voice")
     with tempfile.TemporaryDirectory() as dname:
         for transcript in transcript_list:
             start = transcript["start"]
@@ -269,34 +269,34 @@ def get_features_of_voice(file_path: str, transcript_list: list) -> list:
             audio_segment = sound[start * 1000 : end * 1000]
             fpath = os.path.join(dname, "tmp.mp3")
             audio_segment.export(fpath, format="mp3")
-            wav, sr = librosa.load(fpath, sr=None)
-            print("mfcc")
-            mfcc = librosa.feature.mfcc(y=wav, sr=sr, n_mfcc=40)
-            norm_array = np.mean(mfcc, axis=1) / np.linalg.norm(np.mean(mfcc, axis=1))
-            print(norm_array.shape)
+            # librosa.feature.mfccで特徴量を抽出する
+            # 失敗した場合は、np.zeros(40)を返す
+            # TODO: タイムアウトエラーの実装
+            try:
+                mp3, sr = librosa.load(fpath, sr=None)
+                mfcc = librosa.feature.mfcc(y=mp3, sr=sr, n_mfcc=40)
+                mean_mfcc = np.mean(mfcc, axis=1)
+                norm_array = mean_mfcc / np.linalg.norm(mean_mfcc)
+            except:
+                norm_array = np.zeros(40)
             features.append(norm_array.tolist())
     return features
 
 
-def get_n_cluster_by_x_means(
-    features: np.ndarray, n_clusters: Union[tuple[int], None]
-) -> int:
+def get_n_cluster_by_x_means(features: np.ndarray, n_clusters: list[int]) -> int:
     # 特徴量からクラスタリングを行う
+    # 先にnp.zeros(40)を除外する
+    features = features[~np.all(features == 0, axis=1)]
+
     # そもそも特徴量のcosine類似度が高い場合は、クラスタリングを行わない
     # その場合は、n_clusters=1を返す
+    # 基準となる特徴量を取得
     base_feature = features[0]
     for i, f in enumerate(features):
-        if (
-            np.dot(base_feature, f) / (np.linalg.norm(base_feature) * np.linalg.norm(f))
-            < 0.98
-        ):
+        if np.dot(base_feature, f) < 0.98:
             break
         if i == len(features) - 1:
             return 1
-
-    # n_clustersがNoneの場合は2~10までのクラスタ数を想定
-    if n_clusters is None:
-        n_clusters = tuple(range(2, 11))
 
     # クラスタリングとBICの計算
     bic_dict = {}
@@ -322,11 +322,19 @@ def get_n_cluster_by_x_means(
     return n_cluster
 
 
-def get_speakers_by_k_means(features: np.ndarray, n_clusters: int) -> List[int]:
+def get_speakers_by_k_means(features: np.ndarray, n_clusters: int) -> List[str]:
     # 特徴量からクラスタリングを行う
+    # クラスタリング時は、np.zeros(40)を除外
+    ex_features = features[~np.all(features == 0, axis=1)]
     km = KMeans(n_clusters=n_clusters, init="k-means++", n_init=10, random_state=0)
-    km.fit(features)
+    km.fit(ex_features)
     labels = km.labels_.tolist()
     # 0,1,2...をA,B,C...に変換する
     speakers = [chr(65 + label) for label in labels]
+
+    # np.zeros(40)を除外した分、speakersの長さが短くなっているので、
+    # "-"を追加してspeakersの長さを元に戻す
+    for i, feature in enumerate(features):
+        if np.all(feature == 0):
+            speakers.insert(i, "-")
     return speakers

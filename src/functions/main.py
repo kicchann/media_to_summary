@@ -48,14 +48,11 @@ def transcript_audio(
     speaker_recognition: bool = True,
 ) -> List[Transcription]:
     prompt = description
-    print("transcripting...")
     transcript_list = transcript_by_whisper(audio_data.file_path, prompt)
-    print("getting features...")
     features = []
     if speaker_recognition:
         features = get_features_of_voice(audio_data.file_path, transcript_list)
     transcriptions = []
-    print("returning transcriptions...")
     for i, t in enumerate(transcript_list):
         f = features[i] if len(features) > 0 else []
         # 雑音を文字起こしして同じ文字列が何度も続くことがある
@@ -77,7 +74,7 @@ def transcript_audio(
 
 def recognite_speakers(
     transcriptions: List[Transcription],
-    speakers: Union[int, tuple[int], None] = None,
+    speakers: Union[int, tuple[int]],
 ) -> List[Transcription]:
     """
     話者識別の結果を反映する
