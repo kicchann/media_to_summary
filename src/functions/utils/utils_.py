@@ -204,7 +204,8 @@ def _transcript_by_azure_whisper(
         "content_type": "multipart/form-data",  # "multipart/form-data; boundary=----WebKitFormBoundary7MA4YWxkTrZu0gW",
         "api-key": os.getenv("OPENAI_API_WHISPER_KEY"),
     }
-    data = {"prompt": prompt, "language": language, "response_format": "verbose_json"}
+    data = {"prompt": prompt, "response_format": "verbose_json"}
+    # data = {"prompt": prompt, "language": language, "response_format": "verbose_json"}
     try:
         with open(file_path, "rb") as f:
             transcript = requests.post(
@@ -260,6 +261,7 @@ def get_features_of_voice(file_path: str, transcript_list: list) -> list:
     format = file_path.split(".")[-1]
     sound = AudioSegment.from_file(file_path, format=format)
     features = []
+    print("getting features of voice")
     with tempfile.TemporaryDirectory() as dname:
         for transcript in transcript_list:
             start = transcript["start"]
@@ -268,8 +270,10 @@ def get_features_of_voice(file_path: str, transcript_list: list) -> list:
             fpath = os.path.join(dname, "tmp.mp3")
             audio_segment.export(fpath, format="mp3")
             wav, sr = librosa.load(fpath, sr=None)
-            mfcc = librosa.feature.mfcc(y=wav, sr=sr)
+            print("mfcc")
+            mfcc = librosa.feature.mfcc(y=wav, sr=sr, n_mfcc=40)
             norm_array = np.mean(mfcc, axis=1) / np.linalg.norm(np.mean(mfcc, axis=1))
+            print(norm_array.shape)
             features.append(norm_array.tolist())
     return features
 

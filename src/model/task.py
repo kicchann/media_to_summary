@@ -6,6 +6,7 @@ from src.model import Response, Summarization
 
 
 class Task(BaseModel):
+    id_: str
     status: Literal["success", "error"]
     progress: str
     response_file_path: Union[str, None] = None

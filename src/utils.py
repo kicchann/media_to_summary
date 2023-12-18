@@ -76,6 +76,31 @@ def read_response_file(response_file_path: Union[str, None]) -> Union[Response, 
             v = True if v in ["必要", "はい"] else False
         if k_ in ["ignore_key", "media_info"]:
             continue
+        if k_ == "speakers":
+            if v == "話者判別しない":
+                new_response_dict["recognite_speakers"] = False
+                v = None
+            elif v == "1人":
+                new_response_dict["recognite_speakers"] = True
+                v = 1
+            elif v == "2人":
+                new_response_dict["recognite_speakers"] = True
+                v = 2
+            elif v == "3人":
+                new_response_dict["recognite_speakers"] = True
+                v = 3
+            elif v == "4人":
+                new_response_dict["recognite_speakers"] = True
+                v = 4
+            elif v == "2人~5人":
+                new_response_dict["recognite_speakers"] = True
+                v = tuple(range(2, 6))
+            elif v == "5人~10人":
+                new_response_dict["recognite_speakers"] = True
+                v = tuple(range(5, 11))
+            elif v == "不明":
+                new_response_dict["recognite_speakers"] = True
+                v = None
         new_response_dict[k_] = v
     response = Response(**new_response_dict)
     logger.info("finish reading response file")
@@ -133,13 +158,13 @@ def save_result(result: Task):
         logger.warning("response file path is not found")
         logger.info("finish saving result")
         time_str = dt.now().strftime("%Y%m%d%H%M%S")
-        # result_file_path = os.path.join(result_dir, f"error_{time_str}.json")
-        result_file_path = os.path.join(result_dir, f"error_clone.json")
+        result_file_path = os.path.join(result_dir, f"error_{time_str}.json")
+        # result_file_path = os.path.join(result_dir, f"error_clone.json")
         return
 
     response_file_name = os.path.basename(result.response_file_path)
-    # result_file_path = os.path.join(result_dir, response_file_name)
-    result_file_path = os.path.join(result_dir, "clone.json")
+    result_file_path = os.path.join(result_dir, response_file_name)
+    # result_file_path = os.path.join(result_dir, "clone.json")
 
     if not os.path.exists(result_dir):
         os.makedirs(result_dir, exist_ok=True)

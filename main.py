@@ -2,6 +2,7 @@ import argparse
 import multiprocessing
 import os
 import time
+import uuid
 from typing import Callable
 
 from src import (
@@ -172,6 +173,7 @@ class Handler(FileSystemEventHandler):
                 )
                 self.task_queue.put(
                     Task(
+                        id_=str(uuid.uuid4()),
                         status="error",
                         progress="cannot access to response file or media file",
                         response_file_path=response_file_path,
@@ -185,6 +187,7 @@ class Handler(FileSystemEventHandler):
 
         self.task_queue.put(
             Task(
+                id_=str(uuid.uuid4()),
                 status="success",
                 progress="start media_to_audio",
                 response_file_path=response_file_path,
@@ -280,16 +283,3 @@ if __name__ == "__main__":
     logger.info(f"start watching {args.root_dir}")
     watcher = Watcher(args.root_dir, media_to_audio_queue, result_queue)
     watcher.run()
-
-    # 以下のような結果が表示される
-    # {
-    #     "status": "success",
-    #     "progress": "summarization completed",
-    #     "media_file_path": "data/media/1.mp4",
-    #     "audio_file_path": "data/audio/1.wav",
-    #     "audio_file_size": 0,
-    #     "transcription_file_path": "data/transcription/1.txt",
-    #     "transcription_file_size": 0,
-    #     "summarization_file_path": "data/summarization/1.txt",
-    #     "summarization_file_size": 0,
-    # }
