@@ -29,7 +29,7 @@ def transcription_task(task: Task) -> Task:
         return task
     for i, audio_data in enumerate(task.audio_data_list):
         logger.info(
-            f"{task.id_}: transcription_task = {i+1}/{len(task.audio_data_list)}"
+            f"{task.id_} - transcription_task = {i+1}/{len(task.audio_data_list)}"
         )
         logger.info(f"{task.id_} - start = {audio_data.start}")
         logger.info(f"{task.id_} - end = {audio_data.end}")
@@ -76,8 +76,11 @@ def transcription_task(task: Task) -> Task:
     unique_sections = sorted(list(set([t.section for t in transcriptions])))
     base_times = []
     for section in unique_sections:
-        target_transcriptions = [t for t in transcriptions if t.section == section]
-        base_time = base_times[-1] if len(base_times) > 0 else 0.0
+        if len(base_times) == 0:
+            base_times += [0.0]
+            continue
+        target_transcriptions = [t for t in transcriptions if t.section == section - 1]
+        base_time = base_times[-1]
         end_time = max([t.end for t in target_transcriptions]) + base_time
         base_times += [end_time]
     # start, endを更新
