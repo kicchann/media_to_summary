@@ -40,9 +40,12 @@ MAX_DURATION_FOR_WHISPER: float = 10 * 60
 MIN_SILENCE_LEN: int = 100
 # 無音とみなすdBFS
 SILENCE_THRESH: int = -40
-# 分割後に残す無音長
-KEEP_SILENCE: int = 500
-
+# 分割後に前後に追加する無音長
+# KEEP_SILENCE: int = 500
+# 前後に追加しないので、以下を利用
+KEEP_SILENCE: int = 0
+# ごく短い音声を無視する
+IGNORE_DURATION_MILISECONDS: int = 300
 
 ####################
 # GPT関連

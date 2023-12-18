@@ -30,13 +30,14 @@ def worker(
     final_result_queue: multiprocessing.Queue,
 ):
     for task in iter(task_queue.get, "STOP"):
+        d = {k: v for k, v in task.dict().items() if k != "transcriptions"}
         if task.status == "error":
             logger.info(
                 f"""
                 received error task.
                 pid: {os.getpid()}
                 function: {func.__name__}
-                task: {task}
+                task: {d}
                 """
             )
             final_result_queue.put(task)
@@ -46,17 +47,18 @@ def worker(
             start working!!
             pid: {os.getpid()}
             function: {func.__name__}
-            task: {task}
+            task: {d}
             """
         )
         result: Task = func(task)
+        r = {k: v for k, v in result.dict().items() if k != "transcriptions"}
         if result.status == "success":
             logger.info(
                 f"""
                         working is completed successfully!!
                         pid: {os.getpid()}
                         function: {func.__name__}
-                        result: {result}
+                        result: {r}
                         """
             )
             result_queue.put(result)
@@ -66,7 +68,7 @@ def worker(
                         working is completed with error.
                         pid: {os.getpid()}
                         function: {func.__name__}
-                        result: {result}
+                        result: {r}
                         """
             )
             final_result_queue.put(result)

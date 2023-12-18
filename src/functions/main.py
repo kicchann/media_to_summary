@@ -1,10 +1,7 @@
-import os
-import shutil
 from typing import List, Union
 
-import ffmpeg  # type: ignore
+import numpy as np
 from src.functions.config import (
-    MAX_DURATION_FOR_WHISPER,
     OPENAI_API_35_ENDPOINT,
     OPENAI_API_35_MODEL,
     OPENAI_API_35_VERSION,
@@ -14,62 +11,15 @@ from src.functions.config import (
     TOKEN_LIMIT,
     TOKEN_SIZE_FOR_SPLIT,
 )
-from src.functions.model import AudioData, Transcription
+from src.functions.model import AudioData, Speaker, Transcription
 from src.functions.utils import (
     AudioSplitter,
     create_chat_completion,
-    set_path_for_ffmpeg_bin,
+    get_features_of_voice,
+    get_n_cluster_by_x_means,
+    get_speakers_by_k_means,
     transcript_by_whisper,
 )
-
-
-class MediaToAudioConverter:
-    def __init__(self):
-        self._process_time = 0
-
-    def convert(self, media_file_path: str, audio_file_path: str):
-        # 動画ファイルが入力された場合は，音声ファイルに変換する
-        # 音声ファイルが入力された場合は，そのまま返す
-        # 条件分岐が必要かと思いきや、ffmpegは動画ファイルを入力すると音声ファイルに変換してくれるし、
-        # 音声ファイルを入力するとそのまま音声ファイルを返してくれる
-        # 拡張子が.mp3だからか？
-        self.__convert(
-            media_file_path=media_file_path,
-            audio_file_path=audio_file_path,
-        )
-        return audio_file_path
-
-    @staticmethod
-    def __convert(media_file_path: str, audio_file_path: str):
-        # async def __convert(media_file_path: str, audio_file_path: str):
-        base_dir = os.path.dirname(os.path.dirname(__file__))
-        set_path_for_ffmpeg_bin(base_dir)
-        # ffmpeg.bin = os.path.join(os.path.dirname(os.path.dirname(__file__)), r'ffmpeg_bin\bin')
-        stream = ffmpeg.input(media_file_path)
-        # TODO: 音量正規化
-        # stream = ffmpeg.filter(stream, "loudnorm")
-        stream = ffmpeg.output(stream, audio_file_path, format="mp3")
-        ffmpeg.run(stream, overwrite_output=True)
-        return
-
-    @staticmethod
-    def __media_or_audio(file_path):
-        try:
-            probe = ffmpeg.probe(file_path)
-            video_streams = [
-                stream for stream in probe["streams"] if stream["codec_type"] == "video"
-            ]
-            audio_streams = [
-                stream for stream in probe["streams"] if stream["codec_type"] == "audio"
-            ]
-            if video_streams:
-                return "video"
-            elif audio_streams:
-                return "audio"
-            else:
-                raise Exception("file is not video or audio")
-        except ffmpeg.Error as e:
-            raise e
 
 
 def split_audio(
@@ -94,18 +44,57 @@ def split_audio(
 def transcript_audio(
     audio_data: AudioData,
     description: str = "",
-) -> Transcription:
+    section: int = 0,
+    speaker_recognition: bool = True,
+) -> List[Transcription]:
     prompt = description
-    text = transcript_by_whisper(audio_data.file_path, prompt)
-
-    transcription = Transcription(
-        text="" if text is None else text,
-        keywords=description,
-        speaker=audio_data.speaker,
-        duration=audio_data.duration,
-        start_time=audio_data.start_time,
+    transcript_list = transcript_by_whisper(audio_data.file_path, prompt)
+    features = (
+        get_features_of_voice(audio_data.file_path, transcript_list)
+        if speaker_recognition
+        else []
     )
-    return transcription
+    transcriptions = []
+    for i, t in enumerate(transcript_list):
+        f = []
+        if speaker_recognition:
+            f = features[i]
+        transcriptions.append(
+            Transcription(
+                text=t["text"],
+                keywords=description,
+                features=f,
+                start=t["start"],
+                end=t["end"],
+                section=section,
+            )
+        )
+    return transcriptions
+
+
+def recognite_speakers(
+    transcriptions: List[Transcription],
+    speakers: Union[int, tuple[int], None] = None,
+) -> List[Transcription]:
+    """
+    話者識別の結果を反映する
+    transcriptionsにあるfeaturesとkMeans++を用いて実装
+    speakersがNoneと、tupleの場合はx_meansを使って話者数を推定
+    speakersがintの場合は、その数の話者を想定してクラスタリング
+    """
+    try:
+        features = np.array([t.features for t in transcriptions])
+        if not isinstance(speakers, int):
+            speakers = get_n_cluster_by_x_means(features, speakers)
+        speakers = get_speakers_by_k_means(features, speakers)
+        # Transcriptionにspeaker情報を追加
+        for i, t in enumerate(transcriptions):
+            transcriptions[i] = t.model_copy(
+                update=dict(speaker=Speaker(name=speakers[i]))
+            )
+        return transcriptions
+    except Exception as e:
+        return transcriptions
 
 
 def extract_keywords(transcript_text: str):
@@ -127,14 +116,8 @@ def extract_keywords(transcript_text: str):
 
 def process_transcription(master_prompt: str, transcript_text: str):
     system_prompt = f"""  
-    # instructions  
-
-    - You are an excellent AI assistant  
-    - Show off your brilliant reasoning skills and follow the tasks below in order  
-
-    # tasks  
-
-    Interpret the transcripion abstractly, correct misspelled words and grammatical errors, and output the corrected text.
+    You are a highly skilled AI. 
+    Your task is to analyze the transcripion abstractly, correct misspelled words and grammatical errors, and output the corrected text.
     To correct misspelled words, use the following keywords to indicate what's in your transcription: {master_prompt}.
     Output in JAPANESE.
     """
@@ -200,25 +183,16 @@ def summarize_transcription(
     system_prompt_1 = f"""
     You are a highly skilled AI. Your task is to analyze the following transcription, summarize it without losing any important information, and present the summary in markdown bullet points in Japanese. When possible, include specific numbers, expressions, and examples from the transcription in your summary. Here is the transcription:
     """
-    # system_prompt_1 = f"""
-    # # instructions
-
-    # - You are an excellent AI assistant
-    # - Show off your brilliant reasoning skills and follow the tasks below in order
-
-    # # tasks
-
-    # - Interpret the transcripion abstractly, summarize it without any loss of information, and output the summary with markdown bullet points
-    # - Output in JAPANESE
-    # - It is preferable to refer concrete numbers, expressions, and examples from the transcription as much as possible
-    # """
     summary_header = "## 要約 \n\n"
     summaries = []
-    for transcription in transcriptions:
-        if len(transcriptions) == 1:
+    unique_sections = sorted(list(set([t.section for t in transcriptions])))
+    base_time = 0.0
+    for section in unique_sections:
+        target_transcriptions = [t for t in transcriptions if t.section == section]
+        if len(unique_sections) == 1:
             summary = create_chat_completion(
                 system_prompt_1,
-                transcription.text,
+                " ".join([t.text for t in target_transcriptions]),
                 openai_api_endpoint=OPENAI_API_35_ENDPOINT,
                 openai_api_version=OPENAI_API_35_VERSION,
                 openai_api_model=OPENAI_API_35_MODEL,
@@ -226,43 +200,32 @@ def summarize_transcription(
         else:
             summary = create_chat_completion(
                 system_prompt_1,
-                transcription.text,
+                " ".join([t.text for t in target_transcriptions]),
             )
-        start_time = transcription.start_time
-        end_time = transcription.start_time + transcription.duration
-        start_min = (
-            f"{str(int(start_time//60)).zfill(2)}:{str(int(start_time%60)).zfill(2)}"
-        )
-        end_min = f"{str(int(end_time//60)).zfill(2)}:{str(int(end_time%60)).zfill(2)}"
+        start = min([t.start for t in target_transcriptions]) + base_time
+        end_time = max([t.end for t in target_transcriptions]) + base_time
+        base_time = end_time
+        start_str = f"{str(int(start//60)).zfill(2)}:{str(int(start%60)).zfill(2)}"
+        end_str = f"{str(int(end_time//60)).zfill(2)}:{str(int(end_time%60)).zfill(2)}"
         summaries.append(
             {
-                "start_min": start_min,
-                "end_min": end_min,
+                "start": start_str,
+                "end": end_str,
                 "summary": summary,
             }
         )
-        summary_text = summary_header + "\n\n".join(
-            [
-                f"### {i+1} / {len(summaries)}\n\n{summary['summary']}"
-                for i, summary in enumerate(summaries)
-            ]
-        )
+    summary_text = summary_header + "\n\n".join(
+        [
+            f"### {summary['start']} - {summary['end']}\n\n{summary['summary']}"
+            # f"### {i+1} / {len(summaries)}\n\n{summary['summary']}"
+            for i, summary in enumerate(summaries)
+        ]
+    )
     if add_title:
         title_header = "## タイトル \n\n"
         system_prompt_2 = f"""
         You are a highly skilled AI. Your task is to analyze the following Japanese summary, then generate a simple and easy-to-understand title in Japanese. Output title text only. Here is the summary:
         """
-        # system_prompt_2 = f"""
-        # # instructions
-
-        # - You are an excellent AI assistant
-        # - Show off your brilliant reasoning skills and follow the tasks below in order
-
-        # # tasks
-
-        # - Interpret the summary text abstractly, generate a simlple and easy-to-understand title, and output it
-        # - Output in JAPANESE
-        # """
         title = create_chat_completion(
             system_prompt_2,
             "\n".join([summary["summary"] for summary in summaries]),
@@ -273,18 +236,6 @@ def summarize_transcription(
         system_prompt_3 = f"""
         You are a highly skilled AI. Your task is to analyze the following summary and generate a list of tasks from it. Output only important tasks that require concrete action for simplicity and efficiency. Output only tasks in markdown bullet points in Japanese. Here is the summary:
         """
-        # system_prompt_3 = f"""
-        # # instructions
-
-        # - You are an excellent AI assistant
-        # - Show off your brilliant reasoning skills and follow the tasks below in order
-
-        # # tasks
-
-        # - Interpret the summary text abstractly, and output the todos with markdown bullet points
-        # - Just output bullet points, do not output the heading
-        # - Output in JAPANESE
-        # """
         todo = create_chat_completion(
             system_prompt_3,
             summary_text,

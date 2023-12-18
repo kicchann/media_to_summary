@@ -1,11 +1,15 @@
 import os
-import random
-import string
+import tempfile
 import time
 from typing import List, Union
 
+import librosa
+import numpy as np
 import openai
 import requests
+from pydub import AudioSegment
+from scipy.stats import multivariate_normal
+from sklearn.cluster import KMeans
 from src.functions.config import (
     DEFAULT_LANGUAGE,
     OPENAI_API_35_ENDPOINT,
@@ -188,7 +192,7 @@ def _transcript_by_azure_whisper(
     openai_api_whisper_endpoint: str,
     openai_api_whisper_deployment: str,
     openai_api_whisper_api_version: str,
-) -> Union[str, None]:
+) -> Union[list, None]:
     # azureの場合
     # url = "https://ek53-azureopenai-ncus.openai.azure.com/openai/deployments/whisper-1/audio/transcriptions?api-version=2023-09-01-preview"
     url = "{}openai/deployments/{}/audio/transcriptions?api-version={}".format(
@@ -201,12 +205,19 @@ def _transcript_by_azure_whisper(
         "api-key": os.getenv("OPENAI_API_WHISPER_KEY"),
     }
     data = {"prompt": prompt, "language": language, "response_format": "verbose_json"}
-    with open(file_path, "rb") as f:
-        transcript = requests.post(
-            url, headers=headers, data=data, files=[("file", f)]
-        ).json()
     try:
-        return transcript["text"]
+        with open(file_path, "rb") as f:
+            transcript = requests.post(
+                url, headers=headers, data=data, files=[("file", f)]
+            ).json()
+        return [
+            {
+                "start": s["start"],
+                "end": s["end"],
+                "text": s["text"],
+            }
+            for s in transcript.get("segments")
+        ]
     except:
         return None
 
@@ -215,7 +226,7 @@ def _transcript_by_faster_whisper(
     file_path: str,
     prompt: str,
     language: str,
-):
+) -> Union[list, None]:
     from faster_whisper import WhisperModel
 
     model_size = "large-v2"
@@ -231,7 +242,87 @@ def _transcript_by_faster_whisper(
         initial_prompt=prompt,
         without_timestamps=True,
     )
-    text = ""
-    for segment in segments:
-        text = text + "\n" + segment.text
-    return text
+    return [
+        {
+            "start": s.start,
+            "end": s.end,
+            "text": s.text,
+        }
+        for s in segments
+    ]
+
+
+def get_features_of_voice(file_path: str, transcript_list: list) -> list:
+    # 音声ファイルから特徴量を抽出する
+    # file_pathから音声ファイルを取得して、transcript_listのstartとendの間の音声を抽出する
+    # 抽出した音声を一時ファイルに保存する
+    # 抽出した音声から特徴量を抽出する
+    format = file_path.split(".")[-1]
+    sound = AudioSegment.from_file(file_path, format=format)
+    features = []
+    with tempfile.TemporaryDirectory() as dname:
+        for transcript in transcript_list:
+            start = transcript["start"]
+            end = transcript["end"]
+            audio_segment = sound[start * 1000 : end * 1000]
+            fpath = os.path.join(dname, "tmp.mp3")
+            audio_segment.export(fpath, format="mp3")
+            wav, sr = librosa.load(fpath, sr=None)
+            mfcc = librosa.feature.mfcc(y=wav, sr=sr)
+            norm_array = np.mean(mfcc, axis=1) / np.linalg.norm(np.mean(mfcc, axis=1))
+            features.append(norm_array.tolist())
+    return features
+
+
+def get_n_cluster_by_x_means(
+    features: np.ndarray, n_clusters: Union[tuple[int], None]
+) -> int:
+    # 特徴量からクラスタリングを行う
+    # そもそも特徴量のcosine類似度が高い場合は、クラスタリングを行わない
+    # その場合は、n_clusters=1を返す
+    base_feature = features[0]
+    for i, f in enumerate(features):
+        if (
+            np.dot(base_feature, f) / (np.linalg.norm(base_feature) * np.linalg.norm(f))
+            < 0.98
+        ):
+            break
+        if i == len(features) - 1:
+            return 1
+
+    # n_clustersがNoneの場合は2~10までのクラスタ数を想定
+    if n_clusters is None:
+        n_clusters = tuple(range(2, 11))
+
+    # クラスタリングとBICの計算
+    bic_dict = {}
+    for n_cluster in n_clusters:
+        bic = 0
+        km = KMeans(n_clusters=n_cluster, init="k-means++", n_init=10, random_state=0)
+        km.fit(features)
+        centers = km.cluster_centers_
+        for vec in features:
+            p_sum = 0
+            for i in range(n_cluster):
+                center = centers[i]
+                cov = np.cov(features[km.labels_ == i].T)
+                p_sum += multivariate_normal.pdf(
+                    vec, mean=center, cov=cov, allow_singular=True
+                )
+            bic -= np.log((p_sum + 1e-8) / n_cluster)
+        bic += n_cluster * features.shape[1] * np.log(features.shape[0]) / 2
+        bic_dict[n_cluster] = bic
+
+    # BICが最小のクラスタ数を取得
+    n_cluster = min(bic_dict, key=bic_dict.get)
+    return n_cluster
+
+
+def get_speakers_by_k_means(features: np.ndarray, n_clusters: int) -> List[int]:
+    # 特徴量からクラスタリングを行う
+    km = KMeans(n_clusters=n_clusters, init="k-means++", n_init=10, random_state=0)
+    km.fit(features)
+    labels = km.labels_.tolist()
+    # 0,1,2...をA,B,C...に変換する
+    speakers = [chr(65 + label) for label in labels]
+    return speakers
