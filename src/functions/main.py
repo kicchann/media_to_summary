@@ -186,7 +186,6 @@ def summarize_transcription(
     summary_header = "## 要約 \n\n"
     summaries = []
     unique_sections = sorted(list(set([t.section for t in transcriptions])))
-    base_time = 0.0
     for section in unique_sections:
         target_transcriptions = [t for t in transcriptions if t.section == section]
         if len(unique_sections) == 1:
@@ -202,9 +201,8 @@ def summarize_transcription(
                 system_prompt_1,
                 " ".join([t.text for t in target_transcriptions]),
             )
-        start = min([t.start for t in target_transcriptions]) + base_time
-        end_time = max([t.end for t in target_transcriptions]) + base_time
-        base_time = end_time
+        start = min([t.start for t in target_transcriptions])
+        end_time = max([t.end for t in target_transcriptions])
         start_str = f"{str(int(start//60)).zfill(2)}:{str(int(start%60)).zfill(2)}"
         end_str = f"{str(int(end_time//60)).zfill(2)}:{str(int(end_time%60)).zfill(2)}"
         summaries.append(
