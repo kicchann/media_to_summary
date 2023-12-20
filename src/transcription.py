@@ -24,7 +24,7 @@ def transcription_task(task: Task) -> Task:
         return task
     for i, audio_data in enumerate(task.audio_data_list):
         logger.info(f"transcription_task: {i+1}/{len(task.audio_data_list)}")
-        logger.info(f"start_time: {audio_data.start_time}")
+        logger.info(f"start: {audio_data.start}")
         logger.info(f"duration: {audio_data.duration}")
         prompt_dict = {
             "info_from_user": extract_keywords(task.response.description),

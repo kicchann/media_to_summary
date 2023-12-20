@@ -103,7 +103,7 @@ def transcript_audio(
         keywords=description,
         speaker=audio_data.speaker,
         duration=audio_data.duration,
-        start_time=audio_data.start_time,
+        start=audio_data.start,
     )
     return transcription
 
@@ -228,11 +228,9 @@ def summarize_transcription(
                 system_prompt_1,
                 transcription.text,
             )
-        start_time = transcription.start_time
-        end_time = transcription.start_time + transcription.duration
-        start_min = (
-            f"{str(int(start_time//60)).zfill(2)}:{str(int(start_time%60)).zfill(2)}"
-        )
+        start = transcription.start
+        end_time = transcription.start + transcription.duration
+        start_min = f"{str(int(start//60)).zfill(2)}:{str(int(start%60)).zfill(2)}"
         end_min = f"{str(int(end_time//60)).zfill(2)}:{str(int(end_time%60)).zfill(2)}"
         summaries.append(
             {

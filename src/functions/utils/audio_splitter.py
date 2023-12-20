@@ -64,7 +64,7 @@ class AudioSplitter:
             return [
                 AudioData(
                     file_path=split_audio_file_path,
-                    start_time=0,
+                    start=0,
                     duration=len(sound),
                 )
             ]
@@ -86,12 +86,12 @@ class AudioSplitter:
         # chunkがmax_lengthを超えない最大の長さになるように，chunkを結合する
         # 結合したchunkを，wav形式で出力する
         new_chunk = None
-        start_time = 0.0
+        start = 0.0
         duration_seconds = 0.0
         audio_data_list: List[AudioData] = []
         # まず、use_last_10_mins_onlyがTrueの場合は、最後の10分だけを抽出する
         if use_last_10_mins_only:
-            start_time = total_duration
+            start = total_duration
             for chunk in chunks[::-1]:
                 # 0.3s以下のchunkは無視する
                 if chunk.duration_seconds <= 0.3:
@@ -107,11 +107,11 @@ class AudioSplitter:
                         split_audio_dir, f"{audio_data_id}.{format}"
                     )
                     new_chunk.export(split_audio_file_path, format=format)
-                    start_time -= new_chunk.duration_seconds
+                    start -= new_chunk.duration_seconds
                     audio_data_list += [
                         AudioData(
                             file_path=split_audio_file_path,
-                            start_time=start_time,
+                            start=start,
                             duration=new_chunk.duration_seconds,
                         )
                     ]
@@ -139,11 +139,11 @@ class AudioSplitter:
                 audio_data_list += [
                     AudioData(
                         file_path=split_audio_file_path,
-                        start_time=start_time,
+                        start=start,
                         duration=duration_seconds,
                     )
                 ]
-                start_time += duration_seconds
+                start += duration_seconds
                 new_chunk = chunk
                 duration_seconds = chunk.duration_seconds
             else:
@@ -158,7 +158,7 @@ class AudioSplitter:
             audio_data_list += [
                 AudioData(
                     file_path=split_audio_file_path,
-                    start_time=start_time,
+                    start=start,
                     duration=duration_seconds,
                 )
             ]
