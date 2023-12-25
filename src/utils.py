@@ -1,5 +1,6 @@
 import json
 import os
+import re
 from datetime import datetime as dt
 from glob import glob
 from typing import Union
@@ -76,31 +77,23 @@ def read_response_file(response_file_path: Union[str, None]) -> Union[Response, 
             v = True if v in ["必要", "はい"] else False
         if k_ in ["ignore_key", "media_info"]:
             continue
-        if k_ == "speakers":
-            if v == "話者判別しない":
-                new_response_dict["recognite_speakers"] = False
-                v = None
-            elif v == "1人":
-                new_response_dict["recognite_speakers"] = True
-                v = 1
-            elif v == "2人":
-                new_response_dict["recognite_speakers"] = True
-                v = 2
-            elif v == "3人":
-                new_response_dict["recognite_speakers"] = True
-                v = 3
-            elif v == "4人":
-                new_response_dict["recognite_speakers"] = True
-                v = 4
-            elif v == "2人~5人":
-                new_response_dict["recognite_speakers"] = True
-                v = list(range(2, 6))
-            elif v == "5人~10人":
-                new_response_dict["recognite_speakers"] = True
-                v = list(range(5, 11))
-            else:
-                new_response_dict["recognite_speakers"] = True
-                v = list(range(2, 11))
+        # if k_ == "speakers":
+        #     if v == "話者判別しない":
+        #         new_response_dict["recognite_speakers"] = False
+        #         v = None
+        #     # 正規表現で"*人"にマッチするやつは、*をintにしてvに代入
+        #     elif re.match(r"\d+人", v):
+        #         new_response_dict["recognite_speakers"] = True
+        #         v = int(v.replace("人", ""))
+        #     elif v == "2人~5人":
+        #         new_response_dict["recognite_speakers"] = True
+        #         v = list(range(2, 6))
+        #     elif v == "5人~10人":
+        #         new_response_dict["recognite_speakers"] = True
+        #         v = list(range(5, 11))
+        #     else:
+        #         new_response_dict["recognite_speakers"] = True
+        #         v = list(range(2, 11))
         new_response_dict[k_] = v
     response = Response(**new_response_dict)
     logger.info("finish reading response file")

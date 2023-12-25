@@ -59,13 +59,14 @@ class AudioSplitter:
             keep_silence=True,  # self._keep_silence,
         )
         new_chunks = []
+        # 会議後の無音部分を無視するため、index_for_trimを記録する
+        index_for_trim = None
         for chunk in chunks:
-            # 0.3s以下のchunkは無視する
-            if len(chunk) <= IGNORE_DURATION_MILISECONDS:
-                new_chunks.append(AudioSegment.silent(duration=len(chunk)))
-            else:
-                new_chunks.append(chunk)
-        return new_chunks
+            # 無音部分を無視する
+            if chunk.dBFS < self._silence_thresh:
+                continue
+            new_chunks.append(chunk)
+        return new_chunks[:index_for_trim]
 
     @staticmethod
     def __create_audio_data(
@@ -107,6 +108,8 @@ class AudioSplitter:
         tmp_duration = 0.0
         for chunk in chunks:
             tmp_duration += chunk.duration_seconds
+
+        total_duration = sum([chunk.duration_seconds for chunk in chunks])
 
         # max_durationを超えない場合はそのままaudiosフォルダに移動
         if total_duration <= max_duration:

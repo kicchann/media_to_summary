@@ -14,5 +14,4 @@ class Response(BaseModel):
     add_title: bool
     add_todo: bool
     use_last_10_mins_only: bool = False
-    recognite_speakers: bool = True
-    speakers: Union[int, list[int], None] = None
+    speakers: Union[str, None] = None

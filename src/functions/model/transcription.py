@@ -11,6 +11,19 @@ class Transcription(BaseModel):
     end: float = 0.0
     section: int = 0
 
+    # sortできるようにする
+    def __lt__(self, other):
+        if self.section == other.section:
+            return self.start < other.start
+        else:
+            return self.section < other.section
+
+    def __eq__(self, other):
+        if self.section != other.section:
+            return False
+        else:
+            return self.start == other.start and self.end == other.end
+
 
 # 'segments': [{'id': 0,
 #    'seek': 0,

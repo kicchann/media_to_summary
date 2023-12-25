@@ -2,7 +2,7 @@ import asyncio
 import os
 import tempfile
 import time
-from typing import List, Union
+from typing import Dict, List, Union
 
 import librosa
 import numpy as np
@@ -13,6 +13,7 @@ from scipy.stats import multivariate_normal
 from sklearn.cluster import KMeans
 from src.functions.config import (
     DEFAULT_LANGUAGE,
+    IGNORE_DURATION_MILISECONDS,
     OPENAI_API_35_ENDPOINT,
     OPENAI_API_35_MODEL,
     OPENAI_API_35_VERSION,
@@ -33,8 +34,7 @@ def set_path_for_ffmpeg_bin(base_dir: str):
 
 
 def create_chat_completion(
-    system_prompt: str,
-    user_prompt: str,
+    messages: List[Dict[str, str]],
     max_tokens: Union[int, None] = None,
     temperature: Union[float, None] = None,
     openai_use_azure: Union[bool, None] = None,
@@ -56,8 +56,7 @@ def create_chat_completion(
             if retry > 0:
                 print("retry: {}".format(retry))
             return _create_chat_completion(
-                system_prompt,
-                user_prompt,
+                messages,
                 max_tokens,
                 temperature,
                 openai_use_azure,
@@ -74,8 +73,7 @@ def create_chat_completion(
 
 
 def _create_chat_completion(
-    system_prompt: str,
-    user_prompt: str,
+    messages: List[Dict[str, str]],
     max_tokens: Union[int, None],
     temperature: float,
     openai_use_azure: bool,
@@ -83,50 +81,40 @@ def _create_chat_completion(
     openai_api_version: str,
     openai_api_model: str,
 ) -> str:
-    # # openaiの場合
-    # openai.api_key = os.environ["OPENAI_API_KEY"]
-    # response = openai.chat.completions.create(
-    #     model="gpt-4-32k-0613",
-    #     temperature=0.0,
-    #     messages=[
-    #         {"role": "system", "content": system_prompt},
-    #         {"role": "user", "content": user_prompt},
-    #     ],
-    # )
-    # return response.choices[0].message.content
+    openai.api_type = "azure" if openai_use_azure else "openai"
 
     # azureの場合
-    openai.api_type = "azure" if openai_use_azure else "openai"
     openai.api_version = openai_api_version
     openai.azure_endpoint = openai_api_endpoint
-    openai.api_key = (
-        os.environ["OPENAI_API_KEY"]
-        if "gpt-4" in openai_api_model
-        else os.environ["OPENAI_API_35_KEY"]
-    )
+    if "gpt-4" in openai_api_model:
+        openai.api_key = os.environ["OPENAI_API_KEY"]
+    else:
+        openai.api_key = os.environ["OPENAI_API_35_KEY"]
+    os.environ["http_proxy"] = "http://egvs00395:3128"
+    os.environ["https_proxy"] = "http://egvs00395:3128"
     need_continue: bool = False
     contents: List[str] = []
     response = openai.chat.completions.create(
         model=openai_api_model,
-        messages=[
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt},
-        ],
+        messages=messages,
         max_tokens=max_tokens,
         temperature=temperature,
+        timeout=60,
     )
     content = response.choices[0].message.content
     contents.append(content)
     if response.choices[0].finish_reason == "length":
         need_continue = True
     while need_continue:
+        message = {
+            "role": "assistant",
+            "content": content,
+        }
         response = openai.chat.completions.create(
             model=openai_api_model,
-            messages=[
-                {"role": "user", "content": user_prompt},
-                {"role": "assistant", "content": contents[-1]},
-            ],
+            messages=messages + [message],
             temperature=temperature,
+            timeout=60,
         )
         content = response.choices[0].message.content
         contents.append(content)
@@ -179,7 +167,7 @@ def transcript_by_whisper(
                     openai_api_whisper_api_version,
                 )
             except Exception as e:
-                print("An error occurred:", str(e))
+                print("An error occurred on whisper:", str(e))
                 retry += 1
                 time.sleep(5 * retry)
                 continue
@@ -212,13 +200,11 @@ def _transcript_by_azure_whisper(
             transcript = requests.post(
                 url, headers=headers, data=data, files=[("file", f)]
             ).json()
+        # 0.3秒以下の音声は無視する
         return [
-            {
-                "start": s["start"],
-                "end": s["end"],
-                "text": s["text"],
-            }
+            {"start": s["start"], "end": s["end"], "text": s["text"]}
             for s in transcript.get("segments")
+            if float(s["end"]) - float(s["start"]) > IGNORE_DURATION_MILISECONDS / 1000
         ]
     except:
         return None
@@ -254,7 +240,7 @@ def _transcript_by_faster_whisper(
     ]
 
 
-def get_features_of_voice(file_path: str, transcript_list: list) -> list:
+def get_features_of_voice(file_path: str, start_and_ends: List[List[float]]) -> list:
     # 音声ファイルから特徴量を抽出する
     # file_pathから音声ファイルを取得して、transcript_listのstartとendの間の音声を抽出する
     # 抽出した音声を一時ファイルに保存する
@@ -263,16 +249,16 @@ def get_features_of_voice(file_path: str, transcript_list: list) -> list:
     sound = AudioSegment.from_file(file_path, format=format)
     features = []
     with tempfile.TemporaryDirectory() as dname:
-        for transcript in transcript_list:
-            start = transcript["start"]
-            end = transcript["end"]
-            audio_segment = sound[start * 1000 : end * 1000]
-            fpath = os.path.join(dname, "tmp.mp3")
-            audio_segment.export(fpath, format="mp3")
+        for start_and_end in start_and_ends:
             # librosa.feature.mfccで特徴量を抽出する
             # 失敗した場合は、np.zeros(40)を返す
             # TODO: タイムアウトエラーの実装
             try:
+                start = min(start_and_end)
+                end = max(start_and_end)
+                audio_segment = sound[start * 1000 : end * 1000]
+                fpath = os.path.join(dname, "tmp.mp3")
+                audio_segment.export(fpath, format="mp3")
                 mp3, sr = librosa.load(fpath, sr=None)
                 mfcc = librosa.feature.mfcc(y=mp3, sr=sr, n_mfcc=40)
                 mean_mfcc = np.mean(mfcc, axis=1)

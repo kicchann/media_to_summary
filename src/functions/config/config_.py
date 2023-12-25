@@ -39,7 +39,11 @@ MAX_DURATION_FOR_WHISPER: float = 10 * 60
 # 最小の無音長
 MIN_SILENCE_LEN: int = 100
 # 無音とみなすdBFS
-SILENCE_THRESH: int = -40
+# 参考：https://zatta.link/video/adjustment-audio-level-in-decibel-and-loudness.html
+# 音声（会話・ナレーション等） : -8dBFS ～ -12dBFS
+# 音楽（BGM）：-18dBFS ～ -30dBFS
+# 効果音：-6dBFS ～ -10dBFS
+SILENCE_THRESH: int = -35
 # 分割後に前後に追加する無音長
 # KEEP_SILENCE: int = 500
 # 前後に追加しないので、以下を利用

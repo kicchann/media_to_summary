@@ -1,4 +1,4 @@
-from src.functions import compress_text, summarize_text, summarize_transcription
+from src.functions import summarize_transcription
 from src.log.my_logger import MyLogger
 from src.model import Summarization, Task
 

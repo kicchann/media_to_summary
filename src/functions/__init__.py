@@ -1,10 +1,11 @@
 from .main import (
+    __summarize_text,
     compress_text,
+    correct_transcription,
     extract_keywords,
-    process_transcription,
+    get_keywords_from_document,
     recognite_speakers,
     split_audio,
-    summarize_text,
     summarize_transcription,
     transcript_audio,
 )

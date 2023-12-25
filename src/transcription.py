@@ -1,13 +1,9 @@
-import json
+import time
+from typing import List
 
-from src.functions import (
-    extract_keywords,
-    process_transcription,
-    recognite_speakers,
-    transcript_audio,
-)
+from src.functions import extract_keywords, recognite_speakers, transcript_audio
 from src.log.my_logger import MyLogger
-from src.model import Task
+from src.model import Task, Transcription
 
 my_logger = MyLogger(__name__)
 logger = my_logger.logger
@@ -24,15 +20,13 @@ def transcription_task(task: Task) -> Task:
     """
     logger.info(f"{task.id_} - transcription_task called")
     # 処理結果情報
-    transcriptions = []
+    transcriptions: List[Transcription] = []
     if not task.audio_data_list:
         return task
     for i, audio_data in enumerate(task.audio_data_list):
         logger.info(
-            f"{task.id_} - transcription_task = {i+1}/{len(task.audio_data_list)}"
+            f"{task.id_} - section={i+1}/{len(task.audio_data_list)}, start={audio_data.start}, end={audio_data.end}"
         )
-        logger.info(f"{task.id_} - start = {audio_data.start}")
-        logger.info(f"{task.id_} - end = {audio_data.end}")
         prompt_dict = {
             "info_from_user": extract_keywords(task.response.description),
         }
@@ -41,21 +35,26 @@ def transcription_task(task: Task) -> Task:
             prompt_dict["previous_transcription"] = extract_keywords(text)
         logger.info(f"{task.id_} - prompt_dict = {prompt_dict}")
         try:
+            desc = ", ".join(list(prompt_dict.values()))
+            logger.info(f"{task.id_} - transcribing audio file")
             transcriptions += transcript_audio(
-                audio_data=audio_data,
-                description=",".join(list(prompt_dict.values())),
-                section=i,
+                audio_data=audio_data, description=desc, section=i
             )
-            # TODO: 文法の修正はコストの観点から一旦保留
+            time.sleep(30)
+            # ここで、文字起こしの修正をしようとしたが、うまくいかなかったのでコメントアウト
+            # logger.info(f"{task.id_} - correcting transcriptions")
             # for t in transcriptions_base:
-            #     transcriptions += [t.model_copy(
+            #     logger.info(f"before - {t.text}")
+            #     t = t.model_copy(
             #         update=dict(
-            #             text=process_transcription(
-            #                 master_prompt=t.keywords,
-            #                 transcript_text=t.text,
-            #             ),
+            #             text=correct_transcription(
+            #                 keywords=desc, transcript_text=t.text
+            #             )
+            #             or ""
             #         )
-            #     )]
+            #     )
+            #     logger.info(f"after - {t.text}")
+            #     transcriptions += [t]
         except Exception as e:
             logger.error(f"{task.id_} - error occurred while transcribing audio file")
             logger.error(f"{task.id_} - audio_data = {audio_data}")
@@ -70,38 +69,39 @@ def transcription_task(task: Task) -> Task:
                 ),
             )
             return result
+
+    # TODO:話者識別
+    # 将来話者識別できるように、発言者数を収集しているが、
+    # 現時点ではうまくいかないのでコメントアウト
+    # if task.response.recognite_speakers:
+    #     logger.info(f"{task.id_} - recogniting speakers")
+    #     transcriptions = recognite_speakers(
+    #         task.audio_data_list,
+    #         transcriptions,
+    #         task.response.speakers,
+    #     )
+
     # transcriptionsのstart, endを更新
     # 基準になる秒数を計算
-    logger.info(f"{task.id_} - updating start, end of transcriptions")
-    unique_sections = sorted(list(set([t.section for t in transcriptions])))
-    base_times = []
-    for section in unique_sections:
-        if len(base_times) == 0:
-            base_times += [0.0]
-            continue
-        target_transcriptions = [t for t in transcriptions if t.section == section - 1]
-        base_time = base_times[-1]
-        end_time = max([t.end for t in target_transcriptions]) + base_time
-        base_times += [end_time]
-    # start, endを更新
-    for i in range(len(transcriptions)):
-        base_time = base_times[transcriptions[i].section]
-        start = transcriptions[i].start + base_time
-        end = transcriptions[i].end + base_time
-        transcriptions[i] = transcriptions[i].model_copy(
-            update=dict(start=start, end=end)
-        )
+    def my_round(number, ndigits=0):
+        p = 10**ndigits
+        return (number * p * 2 + 1) // 2 / p
 
-    # 話者識別
-    if task.response.recognite_speakers:
-        logger.info(f"{task.id_} - recogniting speakers")
-        transcriptions = recognite_speakers(transcriptions, task.response.speakers)
+    logger.info(f"{task.id_} - updating start/end of transcriptions")
+    new_transcriptions = []
+    for t in transcriptions:
+        audio_data = task.audio_data_list[t.section]
+        # audio_dataのstartは小数点第1位で丸める
+        start = my_round(audio_data.start, 1)
+        update_ = dict(start=t.start + start, end=t.end + start)
+        new_transcriptions += [t.model_copy(update=update_)]
+
     result = task.model_copy(
         deep=True,
         update=dict(
             status="success",
             progress="transcription completed",
-            transcriptions=transcriptions,
+            transcriptions=new_transcriptions,
         ),
     )
     logger.info(f"{task.id_} - transcription_task finished")
