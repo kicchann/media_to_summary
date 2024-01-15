@@ -1,6 +1,7 @@
 from typing import List, Union
 
 import numpy as np
+
 from src.functions.config import (
     OPENAI_API_35_ENDPOINT,
     OPENAI_API_35_MODEL,
@@ -45,40 +46,11 @@ def transcript_audio(
     audio_data: AudioData,
     description: str = "",
     section: int = 0,
-    speaker_recognition: bool = True,
-) -> List[Transcription]:
-    prompt = description
-    transcript_list = transcript_by_whisper(audio_data.file_path, prompt)
-    features = []
-    if speaker_recognition:
-        features = get_features_of_voice(audio_data.file_path, transcript_list)
-    transcriptions = []
-    for i, t in enumerate(transcript_list):
-        f = features[i] if len(features) > 0 else []
-        # 雑音を文字起こしして同じ文字列が何度も続くことがある
-        # それを除外するために、2回以上続く場合はそのtranscriptionを除外する
-        if i > 1 and t["text"] == transcriptions[-1].text:
-            continue
-        transcriptions.append(
-            Transcription(
-                text=t["text"],
-                keywords=description,
-                features=f,
-                start=t["start"],
-                end=t["end"],
-                section=section,
-            )
-        )
-    return transcriptions
-
-
-def transcript_audio(
-    audio_data: AudioData,
-    description: str = "",
-    section: int = 0,
 ) -> List[Transcription]:
     transcript_list = transcript_by_whisper(audio_data.file_path, description)
-    transcriptions = []
+    transcriptions: List[Transcription] = []
+    if transcript_list is None:
+        return transcriptions
     for i, t in enumerate(transcript_list):
         # 雑音を文字起こしして同じ文字列が何度も続くことがある
         # それを除外するために、2回以上続く場合はそのtranscriptionを除外する

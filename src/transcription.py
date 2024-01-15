@@ -2,8 +2,9 @@ import time
 from typing import List
 
 from src.functions import extract_keywords, recognite_speakers, transcript_audio
+from src.functions.model import Transcription
 from src.log.my_logger import MyLogger
-from src.model import Task, Transcription
+from src.model import Task
 
 my_logger = MyLogger(__name__)
 logger = my_logger.logger
@@ -27,8 +28,12 @@ def transcription_task(task: Task) -> Task:
         logger.info(
             f"{task.id_} - section={i+1}/{len(task.audio_data_list)}, start={audio_data.start}, end={audio_data.end}"
         )
+        if not task.response:
+            continue
         prompt_dict = {
-            "info_from_user": extract_keywords(task.response.description),
+            "info_from_user": extract_keywords(
+                transcript_text=task.response.description
+            ),
         }
         if i > 0:
             text = " ".join([t.text for t in transcriptions if t.section == i - 1])

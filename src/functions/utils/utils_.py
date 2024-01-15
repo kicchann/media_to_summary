@@ -11,6 +11,7 @@ import requests
 from pydub import AudioSegment
 from scipy.stats import multivariate_normal
 from sklearn.cluster import KMeans
+
 from src.functions.config import (
     DEFAULT_LANGUAGE,
     IGNORE_DURATION_MILISECONDS,
@@ -240,7 +241,9 @@ def _transcript_by_faster_whisper(
     ]
 
 
-def get_features_of_voice(file_path: str, start_and_ends: List[List[float]]) -> list:
+def get_features_of_voice(
+    file_path: str, start_and_ends: List[List[float]]
+) -> list[np.ndarray]:
     # 音声ファイルから特徴量を抽出する
     # file_pathから音声ファイルを取得して、transcript_listのstartとendの間の音声を抽出する
     # 抽出した音声を一時ファイルに保存する
