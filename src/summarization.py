@@ -1,4 +1,4 @@
-from src.functions import compress_text, summarize_text, summarize_transcription
+from src.functions import summarize_transcription
 from src.log.my_logger import MyLogger
 from src.model import Summarization, Task
 
@@ -15,12 +15,12 @@ def summarization_task(task: Task) -> Task:
     Returns:
         Task: 処理結果のタスク
     """
-    logger.info("summarization_task called")
+    logger.info(f"{task.id_} - summarization_task called")
 
     if not task.transcriptions or not task.response:
         return task
     try:
-        logger.info("summarizing text")
+        logger.info(f"{task.id_} - summarizing text")
         summary = summarize_transcription(
             transcriptions=task.transcriptions,
             add_title=task.response.add_title,
@@ -37,8 +37,8 @@ def summarization_task(task: Task) -> Task:
         # )
         summarization = Summarization(summary=summary)
     except Exception as e:
-        logger.error("error occurred while summarizing text")
-        logger.error(e)
+        logger.error(f"{task.id_} - error occurred while summarizing text")
+        logger.error(f"{task.id_} - {e}")
         result = task.model_copy(
             deep=True,
             update=dict(
@@ -58,5 +58,5 @@ def summarization_task(task: Task) -> Task:
             summarization=summarization,
         ),
     )
-    logger.info("summarization_task finished")
+    logger.info(f"{task.id_} - summarization_task finished")
     return result

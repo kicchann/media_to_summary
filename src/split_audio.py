@@ -18,7 +18,7 @@ def split_audio_task(task: Task) -> Task:
     Returns:
         Task: 処理結果のタスク
     """
-    logger.info("split_audio_task called")
+    logger.info(f"{task.id_} - split_audio_task called")
 
     os.makedirs(SPLIT_AUDIO_DIR, exist_ok=True)
     try:
@@ -28,8 +28,8 @@ def split_audio_task(task: Task) -> Task:
             use_last_10_mins_only=task.response.use_last_10_mins_only,
         )
     except Exception as e:
-        logger.error("error occurred while splitting audio file")
-        logger.error(e)
+        logger.error(f"{task.id_} - error occurred while splitting audio file")
+        logger.error(f"{task.id_} - {e}")
         result = task.model_copy(
             deep=True,
             update=dict(
@@ -41,7 +41,7 @@ def split_audio_task(task: Task) -> Task:
         )
         return result
     if len(audio_data_list) == 0:
-        logger.warning("failed to split audio file")
+        logger.warning(f"{task.id_} - failed to split audio file")
         result = task.model_copy(
             deep=True,
             update=dict(
@@ -61,6 +61,6 @@ def split_audio_task(task: Task) -> Task:
             audio_data_list=audio_data_list,
         ),
     )
-    logger.info(f"audio is splitted in {len(audio_data_list)} pieces")
-    logger.info("split_audio_task finished")
+    logger.info(f"{task.id_} - audio is splitted in {len(audio_data_list)} pieces")
+    logger.info(f"{task.id_} - split_audio_task finished")
     return result

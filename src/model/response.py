@@ -1,3 +1,5 @@
+from typing import Union
+
 from pydantic import BaseModel
 
 # from src.model import MediaInfo
@@ -12,3 +14,4 @@ class Response(BaseModel):
     add_title: bool
     add_todo: bool
     use_last_10_mins_only: bool = False
+    speakers: Union[str, None] = None

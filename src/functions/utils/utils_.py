@@ -1,13 +1,20 @@
+import asyncio
 import os
-import random
-import string
+import tempfile
 import time
-from typing import List, Union
+from typing import Dict, List, Union
 
+import librosa
+import numpy as np
 import openai
 import requests
+from pydub import AudioSegment
+from scipy.stats import multivariate_normal
+from sklearn.cluster import KMeans
+
 from src.functions.config import (
     DEFAULT_LANGUAGE,
+    IGNORE_DURATION_MILISECONDS,
     OPENAI_API_35_ENDPOINT,
     OPENAI_API_35_MODEL,
     OPENAI_API_35_VERSION,
@@ -28,8 +35,7 @@ def set_path_for_ffmpeg_bin(base_dir: str):
 
 
 def create_chat_completion(
-    system_prompt: str,
-    user_prompt: str,
+    messages: List[Dict[str, str]],
     max_tokens: Union[int, None] = None,
     temperature: Union[float, None] = None,
     openai_use_azure: Union[bool, None] = None,
@@ -51,8 +57,7 @@ def create_chat_completion(
             if retry > 0:
                 print("retry: {}".format(retry))
             return _create_chat_completion(
-                system_prompt,
-                user_prompt,
+                messages,
                 max_tokens,
                 temperature,
                 openai_use_azure,
@@ -69,8 +74,7 @@ def create_chat_completion(
 
 
 def _create_chat_completion(
-    system_prompt: str,
-    user_prompt: str,
+    messages: List[Dict[str, str]],
     max_tokens: Union[int, None],
     temperature: float,
     openai_use_azure: bool,
@@ -78,50 +82,40 @@ def _create_chat_completion(
     openai_api_version: str,
     openai_api_model: str,
 ) -> str:
-    # # openaiの場合
-    # openai.api_key = os.environ["OPENAI_API_KEY"]
-    # response = openai.chat.completions.create(
-    #     model="gpt-4-32k-0613",
-    #     temperature=0.0,
-    #     messages=[
-    #         {"role": "system", "content": system_prompt},
-    #         {"role": "user", "content": user_prompt},
-    #     ],
-    # )
-    # return response.choices[0].message.content
+    openai.api_type = "azure" if openai_use_azure else "openai"
 
     # azureの場合
-    openai.api_type = "azure" if openai_use_azure else "openai"
     openai.api_version = openai_api_version
     openai.azure_endpoint = openai_api_endpoint
-    openai.api_key = (
-        os.environ["OPENAI_API_KEY"]
-        if "gpt-4" in openai_api_model
-        else os.environ["OPENAI_API_35_KEY"]
-    )
+    if "gpt-4" in openai_api_model:
+        openai.api_key = os.environ["OPENAI_API_KEY"]
+    else:
+        openai.api_key = os.environ["OPENAI_API_35_KEY"]
+    os.environ["http_proxy"] = "http://egvs00395:3128"
+    os.environ["https_proxy"] = "http://egvs00395:3128"
     need_continue: bool = False
     contents: List[str] = []
     response = openai.chat.completions.create(
         model=openai_api_model,
-        messages=[
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt},
-        ],
+        messages=messages,
         max_tokens=max_tokens,
         temperature=temperature,
+        timeout=60,
     )
     content = response.choices[0].message.content
     contents.append(content)
     if response.choices[0].finish_reason == "length":
         need_continue = True
     while need_continue:
+        message = {
+            "role": "assistant",
+            "content": content,
+        }
         response = openai.chat.completions.create(
             model=openai_api_model,
-            messages=[
-                {"role": "user", "content": user_prompt},
-                {"role": "assistant", "content": contents[-1]},
-            ],
+            messages=messages + [message],
             temperature=temperature,
+            timeout=60,
         )
         content = response.choices[0].message.content
         contents.append(content)
@@ -174,7 +168,7 @@ def transcript_by_whisper(
                     openai_api_whisper_api_version,
                 )
             except Exception as e:
-                print("An error occurred:", str(e))
+                print("An error occurred on whisper:", str(e))
                 retry += 1
                 time.sleep(5 * retry)
                 continue
@@ -188,7 +182,7 @@ def _transcript_by_azure_whisper(
     openai_api_whisper_endpoint: str,
     openai_api_whisper_deployment: str,
     openai_api_whisper_api_version: str,
-) -> Union[str, None]:
+) -> Union[list, None]:
     # azureの場合
     # url = "https://ek53-azureopenai-ncus.openai.azure.com/openai/deployments/whisper-1/audio/transcriptions?api-version=2023-09-01-preview"
     url = "{}openai/deployments/{}/audio/transcriptions?api-version={}".format(
@@ -200,13 +194,19 @@ def _transcript_by_azure_whisper(
         "content_type": "multipart/form-data",  # "multipart/form-data; boundary=----WebKitFormBoundary7MA4YWxkTrZu0gW",
         "api-key": os.getenv("OPENAI_API_WHISPER_KEY"),
     }
+    # data = {"prompt": prompt, "response_format": "verbose_json"}
     data = {"prompt": prompt, "language": language, "response_format": "verbose_json"}
-    with open(file_path, "rb") as f:
-        transcript = requests.post(
-            url, headers=headers, data=data, files=[("file", f)]
-        ).json()
     try:
-        return transcript["text"]
+        with open(file_path, "rb") as f:
+            transcript = requests.post(
+                url, headers=headers, data=data, files=[("file", f)]
+            ).json()
+        # 0.3秒以下の音声は無視する
+        return [
+            {"start": s["start"], "end": s["end"], "text": s["text"]}
+            for s in transcript.get("segments")
+            if float(s["end"]) - float(s["start"]) > IGNORE_DURATION_MILISECONDS / 1000
+        ]
     except:
         return None
 
@@ -215,7 +215,7 @@ def _transcript_by_faster_whisper(
     file_path: str,
     prompt: str,
     language: str,
-):
+) -> Union[list, None]:
     from faster_whisper import WhisperModel
 
     model_size = "large-v2"
@@ -231,7 +231,99 @@ def _transcript_by_faster_whisper(
         initial_prompt=prompt,
         without_timestamps=True,
     )
-    text = ""
-    for segment in segments:
-        text = text + "\n" + segment.text
-    return text
+    return [
+        {
+            "start": s.start,
+            "end": s.end,
+            "text": s.text,
+        }
+        for s in segments
+    ]
+
+
+def get_features_of_voice(
+    file_path: str, start_and_ends: List[List[float]]
+) -> list[np.ndarray]:
+    # 音声ファイルから特徴量を抽出する
+    # file_pathから音声ファイルを取得して、transcript_listのstartとendの間の音声を抽出する
+    # 抽出した音声を一時ファイルに保存する
+    # 抽出した音声から特徴量を抽出する
+    format = file_path.split(".")[-1]
+    sound = AudioSegment.from_file(file_path, format=format)
+    features = []
+    with tempfile.TemporaryDirectory() as dname:
+        for start_and_end in start_and_ends:
+            # librosa.feature.mfccで特徴量を抽出する
+            # 失敗した場合は、np.zeros(40)を返す
+            # TODO: タイムアウトエラーの実装
+            try:
+                start = min(start_and_end)
+                end = max(start_and_end)
+                audio_segment = sound[start * 1000 : end * 1000]
+                fpath = os.path.join(dname, "tmp.mp3")
+                audio_segment.export(fpath, format="mp3")
+                mp3, sr = librosa.load(fpath, sr=None)
+                mfcc = librosa.feature.mfcc(y=mp3, sr=sr, n_mfcc=40)
+                mean_mfcc = np.mean(mfcc, axis=1)
+                norm_array = mean_mfcc / np.linalg.norm(mean_mfcc)
+            except:
+                norm_array = np.zeros(40)
+            features.append(norm_array.tolist())
+    return features
+
+
+def get_n_cluster_by_x_means(features: np.ndarray, n_clusters: list[int]) -> int:
+    # 特徴量からクラスタリングを行う
+    # 先にnp.zeros(40)を除外する
+    features = features[~np.all(features == 0, axis=1)]
+
+    # そもそも特徴量のcosine類似度が高い場合は、クラスタリングを行わない
+    # その場合は、n_clusters=1を返す
+    # 基準となる特徴量を取得
+    base_feature = features[0]
+    for i, f in enumerate(features):
+        if np.dot(base_feature, f) < 0.98:
+            break
+        if i == len(features) - 1:
+            return 1
+
+    # クラスタリングとBICの計算
+    bic_dict = {}
+    for n_cluster in n_clusters:
+        bic = 0
+        km = KMeans(n_clusters=n_cluster, init="k-means++", n_init=10, random_state=0)
+        km.fit(features)
+        centers = km.cluster_centers_
+        for vec in features:
+            p_sum = 0
+            for i in range(n_cluster):
+                center = centers[i]
+                cov = np.cov(features[km.labels_ == i].T)
+                p_sum += multivariate_normal.pdf(
+                    vec, mean=center, cov=cov, allow_singular=True
+                )
+            bic -= np.log((p_sum + 1e-8) / n_cluster)
+        bic += n_cluster * features.shape[1] * np.log(features.shape[0]) / 2
+        bic_dict[n_cluster] = bic
+
+    # BICが最小のクラスタ数を取得
+    n_cluster = min(bic_dict, key=bic_dict.get)
+    return n_cluster
+
+
+def get_speakers_by_k_means(features: np.ndarray, n_clusters: int) -> List[str]:
+    # 特徴量からクラスタリングを行う
+    # クラスタリング時は、np.zeros(40)を除外
+    ex_features = features[~np.all(features == 0, axis=1)]
+    km = KMeans(n_clusters=n_clusters, init="k-means++", n_init=10, random_state=0)
+    km.fit(ex_features)
+    labels = km.labels_.tolist()
+    # 0,1,2...をA,B,C...に変換する
+    speakers = [chr(65 + label) for label in labels]
+
+    # np.zeros(40)を除外した分、speakersの長さが短くなっているので、
+    # "-"を追加してspeakersの長さを元に戻す
+    for i, feature in enumerate(features):
+        if np.all(feature == 0):
+            speakers.insert(i, "-")
+    return speakers
