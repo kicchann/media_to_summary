@@ -68,7 +68,7 @@ def transcript_audio(
         )
     return transcriptions
 
-
+  
 def recognite_speakers(
     audio_data_list: List[AudioData],
     transcriptions: List[Transcription],
